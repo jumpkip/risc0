@@ -1,16 +1,17 @@
 // Copyright 2025 RISC Zero, Inc.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
+// Licensed under the Apache License, Version 2.0, <LICENSE-APACHE or
+// http://apache.org/licenses/LICENSE-2.0> or the MIT license <LICENSE-MIT or
+// http://opensource.org/licenses/MIT>, at your option. This file may not be
+// copied, modified, or distributed except according to those terms.
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+//
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 
 extern crate alloc;
 
@@ -25,20 +26,20 @@ use lazy_static::lazy_static;
 #[cfg(feature = "std")]
 use std::sync::Arc;
 
-use anyhow::{anyhow, bail, Result};
+use anyhow::{Result, anyhow, bail};
 use derive_more::Debug;
 use risc0_zkp::{
     core::{
-        digest::{Digest, DIGEST_WORDS},
-        hash::poseidon2::{poseidon2_mix, CELLS},
+        digest::{DIGEST_WORDS, Digest},
+        hash::poseidon2::{CELLS, poseidon2_mix},
     },
-    field::{baby_bear::BabyBearElem, Elem as _},
+    field::{Elem as _, baby_bear::BabyBearElem},
 };
 use serde::{Deserialize, Serialize};
 
 use crate::{
+    PAGE_BYTES, PAGE_WORDS, Program, WORD_SIZE,
     addr::{ByteAddr, WordAddr},
-    Program, PAGE_BYTES, PAGE_WORDS, WORD_SIZE,
 };
 
 const MEMORY_BYTES: u64 = 1 << 32;

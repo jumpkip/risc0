@@ -1,23 +1,24 @@
-// Copyright 2024 RISC Zero, Inc.
+// Copyright 2025 RISC Zero, Inc.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
+// Licensed under the Apache License, Version 2.0, <LICENSE-APACHE or
+// http://apache.org/licenses/LICENSE-2.0> or the MIT license <LICENSE-MIT or
+// http://opensource.org/licenses/MIT>, at your option. This file may not be
+// copied, modified, or distributed except according to those terms.
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+//
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 
 //! Minimal Merkle tree implementation used in the recursion system for
 //! committing to a group of control IDs.
 
 use alloc::vec::Vec;
 
-use anyhow::{ensure, Result};
+use anyhow::{Result, ensure};
 use borsh::{BorshDeserialize, BorshSerialize};
 use risc0_core::field::baby_bear::BabyBear;
 use risc0_zkp::core::{digest::Digest, hash::HashFn};
@@ -82,7 +83,7 @@ impl MerkleGroup {
 
     fn calc_range_root(&self, start: u32, end: u32, hashfn: &dyn HashFn<BabyBear>) -> Digest {
         assert!(start < end);
-        let res = if start + 1 == end {
+        if start + 1 == end {
             *self.leaf_or_empty(start)
         } else {
             let mid = (start + end) / 2;
@@ -91,8 +92,7 @@ impl MerkleGroup {
             let left = self.calc_range_root(start, mid, hashfn);
             let right = self.calc_range_root(mid, end, hashfn);
             *hashfn.hash_pair(&left, &right)
-        };
-        res
+        }
     }
 
     /// Calculate and return a [MerkleProof] for the given leaf.

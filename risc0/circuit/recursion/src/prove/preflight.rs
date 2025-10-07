@@ -1,27 +1,28 @@
 // Copyright 2025 RISC Zero, Inc.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
+// Licensed under the Apache License, Version 2.0, <LICENSE-APACHE or
+// http://apache.org/licenses/LICENSE-2.0> or the MIT license <LICENSE-MIT or
+// http://opensource.org/licenses/MIT>, at your option. This file may not be
+// copied, modified, or distributed except according to those terms.
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+//
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 
 use std::collections::{BTreeMap, VecDeque};
 
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use risc0_circuit_recursion_sys::RawPreflightCycle;
 use risc0_core::field::baby_bear::{BabyBearElem as Fp, BabyBearExtElem as FpExt};
 use risc0_zkp::{
     core::{
         digest::{DIGEST_SHORTS, DIGEST_WORDS, WORD_SIZE},
         hash::{
-            poseidon2::{poseidon2_mix, CELLS},
+            poseidon2::{CELLS, poseidon2_mix},
             sha::SHA256_INIT,
         },
     },
@@ -30,7 +31,7 @@ use risc0_zkp::{
 };
 use sha2::digest::generic_array::GenericArray;
 
-use crate::layout::{RecursionMicroInstLayout, CODE_LAYOUT};
+use crate::layout::{CODE_LAYOUT, RecursionMicroInstLayout};
 
 const CHECKED_COEFFS_PER_POLY: usize = 16;
 const BABY_BEAR_TO_MONTGOMERY: u32 = 0xFFFFFFE;
@@ -225,7 +226,9 @@ impl Preflight {
         }
 
         let eval_pt_addr = self.get(code, inst.eval_point);
-        tracing::trace!("Checked bytes: eval_pt={eval_pt_addr:?} prep_full = {prep_full} keep_coeffs = {keep_coeffs} keep_upper_state = {keep_upper_state}");
+        tracing::trace!(
+            "Checked bytes: eval_pt={eval_pt_addr:?} prep_full = {prep_full} keep_coeffs = {keep_coeffs} keep_upper_state = {keep_upper_state}"
+        );
 
         let write_addr = self.get(code, CODE_LAYOUT.code.write_addr);
         let mut evaluated = FpExt::ZERO;
@@ -377,7 +380,7 @@ impl Preflight {
         let in_a = self.wom_read(args[0]);
         let in_b = self.wom_read(args[1]);
         let result = if args_u32[2] != 0 {
-            // AND and combine [a, b, 0, 0] & [c, d, 0, 0] -> [(a&c) + ((b&d) << 16), 0, 0,
+            // AND combine [a, b, 0, 0] & [c, d, 0, 0] -> [(a&c) + ((b&d) << 16), 0, 0,
             // 0]
             let result = FpExt::new(
                 Fp::new(

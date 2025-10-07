@@ -1,41 +1,41 @@
 // Copyright 2025 RISC Zero, Inc.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
+// Licensed under the Apache License, Version 2.0, <LICENSE-APACHE or
+// http://apache.org/licenses/LICENSE-2.0> or the MIT license <LICENSE-MIT or
+// http://opensource.org/licenses/MIT>, at your option. This file may not be
+// copied, modified, or distributed except according to those terms.
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+//
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 
 use std::{cell::RefCell, rc::Rc};
 
-use anyhow::{anyhow, bail, Context as _, Result};
+use anyhow::{Context as _, Result, anyhow, bail};
 use risc0_binfmt::ByteAddr;
 // use risc0_circuit_rv32im::prove::emu::{
 //     addr::{ByteAddr, WordAddr},
 //     rv32im::{DecodedInstruction, EmuContext, Emulator, Instruction, TrapCause},
 // };
 use risc0_circuit_rv32im::{
-    execute::{
-        platform::WORD_SIZE, Executor, Syscall as CircuitSyscall,
-        SyscallContext as CircuitSyscallContext, DEFAULT_SEGMENT_LIMIT_PO2, USER_END_ADDR,
-    },
     MAX_INSN_CYCLES,
+    execute::{
+        DEFAULT_SEGMENT_LIMIT_PO2, Executor, Syscall as CircuitSyscall,
+        SyscallContext as CircuitSyscallContext, USER_END_ADDR, platform::WORD_SIZE,
+    },
 };
 use risc0_zkvm_platform::{
-    fileno,
+    PAGE_SIZE, WORD_SIZE, fileno,
     memory::is_guest_memory,
     syscall::{
         ecall,
         nr::{SYS_EXIT, SYS_FORK},
         reg_abi::{REG_A0, REG_A1, REG_A2, REG_MAX, REG_T0},
     },
-    PAGE_SIZE, WORD_SIZE,
 };
 
 use super::{Syscall, SyscallContext, SyscallTable};

@@ -1,43 +1,43 @@
 // Copyright 2025 RISC Zero, Inc.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
+// Licensed under the Apache License, Version 2.0, <LICENSE-APACHE or
+// http://apache.org/licenses/LICENSE-2.0> or the MIT license <LICENSE-MIT or
+// http://opensource.org/licenses/MIT>, at your option. This file may not be
+// copied, modified, or distributed except according to those terms.
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+//
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 
 use std::rc::Rc;
 
 use anyhow::Result;
 use risc0_circuit_rv32im_sys::{
-    risc0_circuit_rv32im_cuda_accum, risc0_circuit_rv32im_cuda_eval_check,
-    risc0_circuit_rv32im_cuda_witgen, RawAccumBuffers, RawBuffer, RawExecBuffers,
-    RawPreflightTrace,
+    RawAccumBuffers, RawBuffer, RawExecBuffers, RawPreflightTrace, risc0_circuit_rv32im_cuda_accum,
+    risc0_circuit_rv32im_cuda_eval_check, risc0_circuit_rv32im_cuda_witgen,
 };
 use risc0_core::{
-    field::{map_pow, Elem, ExtElem as _, RootsOfUnity},
+    field::{Elem, ExtElem as _, RootsOfUnity, map_pow},
     scope,
 };
 use risc0_sys::ffi_wrap;
 use risc0_zkp::{
+    INV_RATE,
     core::log2_ceil,
     hal::{
-        cuda::{BufferImpl as CudaBuffer, CudaHal, CudaHalPoseidon2, CudaHash, CudaHashPoseidon2},
         AccumPreflight, Buffer, CircuitHal,
+        cuda::{BufferImpl as CudaBuffer, CudaHal, CudaHalPoseidon2, CudaHash, CudaHashPoseidon2},
     },
-    INV_RATE,
 };
 
 use crate::{
-    prove::{SegmentProver, GLOBAL_MIX, GLOBAL_OUT},
+    prove::{GLOBAL_MIX, GLOBAL_OUT, SegmentProver},
     zirgen::{
-        circuit::{ExtVal, Val, REGISTER_GROUP_ACCUM, REGISTER_GROUP_CODE, REGISTER_GROUP_DATA},
+        circuit::{ExtVal, REGISTER_GROUP_ACCUM, REGISTER_GROUP_CODE, REGISTER_GROUP_DATA, Val},
         info::{NUM_POLY_MIX_POWERS, POLY_MIX_POWERS},
     },
 };
@@ -248,14 +248,14 @@ mod tests {
     use risc0_zkp::{
         adapter::CircuitInfo as _,
         core::hash::sha::Sha256HashSuite,
-        hal::{cpu::CpuHal, cuda::CudaHalSha256, Hal},
+        hal::{Hal, cpu::CpuHal, cuda::CudaHalSha256},
     };
     use test_log::test;
 
     use super::*;
     use crate::{
         prove::hal::cpu::CpuCircuitHal,
-        zirgen::{taps::TAPSET, CircuitImpl},
+        zirgen::{CircuitImpl, taps::TAPSET},
     };
 
     pub struct EvalCheckParams {

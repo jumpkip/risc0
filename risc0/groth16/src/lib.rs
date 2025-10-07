@@ -1,16 +1,17 @@
 // Copyright 2025 RISC Zero, Inc.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
+// Licensed under the Apache License, Version 2.0, <LICENSE-APACHE or
+// http://apache.org/licenses/LICENSE-2.0> or the MIT license <LICENSE-MIT or
+// http://opensource.org/licenses/MIT>, at your option. This file may not be
+// copied, modified, or distributed except according to those terms.
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+//
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 
 //! # Groth16
 //!
@@ -56,6 +57,25 @@
 //! crate. With `ProverOpts::groth16()` it will produce a Groth16 proof.
 //!
 //! [risc0-zkvm]: https://docs.rs/risc0-zkvm/latest/risc0_zkvm/
+//!
+//! # Publishing the rzup Component
+//! The groth16 proving on GPU requires a special rzup component be installed. Publishing this
+//! component can be done with the following commands:
+//!
+//! ```bash
+//! export VERSION=0.1.0
+//! cargo xtask-groth16 -- ~/groth16-tmp
+//! cargo run --bin rzup -- \
+//!     publish create-artifact \
+//!     --input ~/groth16-tmp/v$VERSION-risc0-groth16 \
+//!     --output ~/groth16-component.tar.xz
+//! aws-vault exec ci -- \
+//! cargo run --bin rzup -- \
+//!     publish upload \
+//!     --target-agnostic \
+//!     risc0-groth16 $VERSION \
+//!     ~/groth16-component.tar.xz
+//! ```
 
 #![cfg_attr(not(feature = "std"), no_std)]
 #![deny(missing_docs)]
@@ -72,13 +92,13 @@ mod verifier;
 use alloc::vec::Vec;
 use core::str::FromStr;
 
-use anyhow::{anyhow, Error, Result};
+use anyhow::{Error, Result, anyhow};
 use ark_bn254::{G1Affine, G2Affine};
 use ark_serialize::CanonicalDeserialize;
 use num_bigint::BigInt;
 
 pub use types::{ProofJson, PublicInputsJson, Seal, VerifyingKeyJson};
-pub use verifier::{verifying_key, Fr, Verifier, VerifyingKey};
+pub use verifier::{Fr, Verifier, VerifyingKey, verifying_key};
 
 /// Deserialize an element over the G1 group from bytes in big-endian format
 pub(crate) fn g1_from_bytes(elem: &[Vec<u8>]) -> Result<G1Affine, Error> {

@@ -1,20 +1,21 @@
 // Copyright 2025 RISC Zero, Inc.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
+// Licensed under the Apache License, Version 2.0, <LICENSE-APACHE or
+// http://apache.org/licenses/LICENSE-2.0> or the MIT license <LICENSE-MIT or
+// http://opensource.org/licenses/MIT>, at your option. This file may not be
+// copied, modified, or distributed except according to those terms.
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+//
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 
 use std::collections::BTreeSet;
 
-use anyhow::{anyhow, bail, ensure, Result};
+use anyhow::{Result, anyhow, bail, ensure};
 use derive_more::Debug;
 use num_traits::FromPrimitive as _;
 use risc0_binfmt::{ByteAddr, WordAddr};
@@ -23,19 +24,19 @@ use risc0_core::scope;
 use risc0_zkp::core::digest::DIGEST_WORDS;
 
 use crate::{
+    EcallKind,
     execute::{
         bigint::BigIntBytes,
         node_idx,
-        pager::{page_idx, PageState, PagedMemory},
+        pager::{PageState, PagedMemory, page_idx},
         platform::*,
         poseidon2::{Poseidon2, Poseidon2State},
         r0vm::{LoadOp, Risc0Context, Risc0Machine},
-        rv32im::{disasm, Emulator, InsnKind},
+        rv32im::{Emulator, InsnKind, disasm},
         segment::Segment,
         sha2::Sha2State,
     },
     zirgen::circuit::ExtVal,
-    EcallKind,
 };
 
 use super::{
@@ -437,6 +438,16 @@ impl<'a> Preflight<'a> {
                     Back::None,
                 );
             }
+            InsnKind::Fence => {
+                self.add_cycle(
+                    state,
+                    pc,
+                    major::CONTROL0,
+                    control_minor::FENCE,
+                    0,
+                    Back::None,
+                );
+            }
             _ => {
                 self.add_cycle(state, pc, insn.major(), insn.minor(), 0, Back::None);
             }
@@ -567,7 +578,7 @@ impl Risc0Context for Preflight<'_> {
         // tracing::trace!("load_u32: {addr:?}");
         let cycle = (2 * self.trace.cycles.len()) as u32;
         // MERKLE_TREE_START_ADDR is the first address in a special region of memory that is
-        // outside of the user-addressible range. This region also contains the PoVW nonce.
+        // outside of the user-addressable range. This region also contains the PoVW nonce.
         let word = if addr >= MERKLE_TREE_START_ADDR {
             if addr < MERKLE_TREE_END_ADDR {
                 self.page_memory

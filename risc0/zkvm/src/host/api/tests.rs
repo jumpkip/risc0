@@ -1,16 +1,17 @@
 // Copyright 2025 RISC Zero, Inc.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
+// Licensed under the Apache License, Version 2.0, <LICENSE-APACHE or
+// http://apache.org/licenses/LICENSE-2.0> or the MIT license <LICENSE-MIT or
+// http://opensource.org/licenses/MIT>, at your option. This file may not be
+// copied, modified, or distributed except according to those terms.
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+//
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 
 use std::{
     collections::BTreeMap,
@@ -24,17 +25,17 @@ use anyhow::Result;
 use risc0_circuit_recursion::control_id::{ALLOWED_CONTROL_ROOT, BN254_IDENTITY_CONTROL_ID};
 use risc0_zkp::core::hash::poseidon_254::Poseidon254HashSuite;
 use risc0_zkvm_methods::{
-    multi_test::MultiTestSpec, HELLO_COMMIT_ELF, HELLO_COMMIT_ID, MULTI_TEST_ELF, MULTI_TEST_ID,
-    MULTI_TEST_PATH,
+    HELLO_COMMIT_ELF, HELLO_COMMIT_ID, MULTI_TEST_ELF, MULTI_TEST_ID, MULTI_TEST_PATH,
+    multi_test::MultiTestSpec,
 };
-use tempfile::{tempdir, TempDir};
+use tempfile::{TempDir, tempdir};
 use test_log::test;
 
 use super::{Asset, AssetRequest, ConnectionWrapper, Connector, TcpConnection};
 use crate::{
-    receipt::SuccinctReceipt, recursion::MerkleGroup, ApiClient, ApiServer, ExecutorEnv,
-    InnerReceipt, ProveKeccakRequest, ProverOpts, Receipt, ReceiptClaim, SegmentReceipt,
-    SessionInfo, SuccinctReceiptVerifierParameters, Unknown, VerifierContext,
+    ApiClient, ApiServer, ExecutorEnv, InnerReceipt, ProveKeccakRequest, ProverOpts, Receipt,
+    ReceiptClaim, SegmentReceipt, SessionInfo, SuccinctReceiptVerifierParameters, Unknown,
+    VerifierContext, receipt::SuccinctReceipt, recursion::MerkleGroup,
 };
 
 struct TestClientConnector {
@@ -233,6 +234,7 @@ fn prove_segment_elf() {
 }
 
 #[test]
+#[cfg_attr(all(ci, not(ci_profile = "slow")), ignore = "slow test")]
 fn lift_join_identity() {
     let segment_limit_po2 = 16; // 64k cycles
     let cycles = 1 << segment_limit_po2;
@@ -376,13 +378,13 @@ mod keccak_po2 {
     use std::{cell::RefCell, rc::Rc};
 
     use anyhow::Result;
-    use risc0_zkvm_methods::{multi_test::MultiTestSpec, MULTI_TEST_ELF};
+    use risc0_zkvm_methods::{MULTI_TEST_ELF, multi_test::MultiTestSpec};
     use test_log::test;
 
     use super::Asset;
     use crate::{
-        host::api::tests::TestClient, receipt::SuccinctReceipt, CoprocessorCallback, ExecutorEnv,
-        ProveKeccakRequest, Unknown,
+        CoprocessorCallback, ExecutorEnv, ProveKeccakRequest, Unknown,
+        host::api::tests::TestClient, receipt::SuccinctReceipt,
     };
 
     pub const KECCAK_TEST_PO2: u32 = 15;

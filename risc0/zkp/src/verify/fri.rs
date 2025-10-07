@@ -1,16 +1,17 @@
 // Copyright 2025 RISC Zero, Inc.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
+// Licensed under the Apache License, Version 2.0, <LICENSE-APACHE or
+// http://apache.org/licenses/LICENSE-2.0> or the MIT license <LICENSE-MIT or
+// http://opensource.org/licenses/MIT>, at your option. This file may not be
+// copied, modified, or distributed except according to those terms.
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+//
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 
 use alloc::vec::Vec;
 use core::ops::DerefMut;
@@ -19,13 +20,13 @@ use risc0_core::field::{Elem, ExtElem, Field, RootsOfUnity};
 
 use super::Verifier;
 use crate::{
+    FRI_FOLD, FRI_FOLD_PO2, FRI_MIN_DEGREE, INV_RATE, QUERIES,
     core::{
         hash::HashFn,
         log2_ceil,
         ntt::{bit_reverse, interpolate_ntt},
     },
-    verify::{merkle::MerkleTreeVerifier, read_iop::ReadIOP, VerificationError},
-    FRI_FOLD, FRI_FOLD_PO2, FRI_MIN_DEGREE, INV_RATE, QUERIES,
+    verify::{VerificationError, merkle::MerkleTreeVerifier, read_iop::ReadIOP},
 };
 
 /// VerifyRoundInfo contains the data against which the queries for a particular
@@ -126,7 +127,7 @@ where
         let final_digest = hashfn.hash_elem_slice(final_coeffs);
         self.iop().commit(&final_digest);
         // Get the generator for the final polynomial evaluations
-        let gen = <F::Elem as RootsOfUnity>::ROU_FWD[log2_ceil(domain)];
+        let gen_ = <F::Elem as RootsOfUnity>::ROU_FWD[log2_ceil(domain)];
         // Do queries
         let mut poly_buf: Vec<F::ExtElem> = Vec::with_capacity(degree);
         for _ in 0..QUERIES {
@@ -138,7 +139,7 @@ where
                 self.verify_query(round, &mut pos, &mut goal)?;
             }
             // Do final verification
-            let x = gen.pow(pos);
+            let x = gen_.pow(pos);
 
             poly_buf.clear();
             poly_buf.extend((0..degree).map(|i| {

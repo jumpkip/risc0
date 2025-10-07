@@ -1,16 +1,17 @@
 // Copyright 2025 RISC Zero, Inc.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
+// Licensed under the Apache License, Version 2.0, <LICENSE-APACHE or
+// http://apache.org/licenses/LICENSE-2.0> or the MIT license <LICENSE-MIT or
+// http://opensource.org/licenses/MIT>, at your option. This file may not be
+// copied, modified, or distributed except according to those terms.
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+//
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 
 #![allow(unused)]
 
@@ -22,31 +23,35 @@ use std::{
     time::Duration,
 };
 
-use anyhow::{anyhow, Context, Error as AnyhowErr, Result};
+use anyhow::{Context, Error as AnyhowErr, Result, anyhow};
 use axum::{
-    body::{to_bytes, Body},
+    Json, Router,
+    body::{Body, to_bytes},
     extract::{FromRequestParts, Path, State},
-    http::{request::Parts, StatusCode},
+    http::{StatusCode, request::Parts},
     response::{IntoResponse, Response},
     routing::{get, post, put},
-    Json, Router,
 };
 use axum_extra::extract::Host;
 use bonsai_sdk::responses::{
     CreateSessRes, ImgUploadRes, ProofReq, ReceiptDownload, SessionStats, SessionStatusRes,
     SnarkReq, SnarkStatusRes, UploadRes,
 };
-use kameo::actor::ActorRef;
-use risc0_circuit_rv32im::execute::DEFAULT_SEGMENT_LIMIT_PO2;
-use risc0_zkvm::{compute_image_id, Receipt};
+use risc0_zkvm::{Receipt, compute_image_id, rpc::JobRequest};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::net::TcpListener;
 use uuid::Uuid;
 
 use crate::actors::{
+    actor::ActorRef,
+    allocator::PROXY_URL_PATH,
+    error::Error as ActorError,
     manager::ManagerActor,
-    protocol::{CreateJobRequest, JobStatus, JobStatusRequest, ProofRequest, TaskError},
+    protocol::{
+        CreateJobRequest, JobInfo, JobStatus, JobStatusReply, JobStatusRequest, ProofRequest,
+        ProofResult, ShrinkWrapKind, ShrinkWrapRequest, ShrinkWrapResult, TaskError,
+    },
 };
 
 // TODO: Add authn/z to get a userID
@@ -234,6 +239,12 @@ impl AppState {
         std::fs::create_dir_all(&dir).unwrap();
         dir
     }
+
+    fn journals_dir(&self) -> PathBuf {
+        let dir = self.storage_root.join("journals");
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
 }
 
 fn validate_path(base_path: &FsPath, requested_path: &str) -> Option<PathBuf> {
@@ -271,7 +282,7 @@ async fn image_upload(
         return Err(AppError::ImgAlreadyExists(image_id));
     }
     Ok(Json(ImgUploadRes {
-        url: format!("http://{hostname}/images/upload/{image_id}"),
+        url: format!("http://{hostname}{PROXY_URL_PATH}/images/upload/{image_id}"),
     }))
 }
 
@@ -310,7 +321,7 @@ async fn input_upload(
 ) -> Result<Json<UploadRes>, AppError> {
     let input_id = Uuid::new_v4();
     Ok(Json(UploadRes {
-        url: format!("http://{hostname}/inputs/upload/{input_id}"),
+        url: format!("http://{hostname}{PROXY_URL_PATH}/inputs/upload/{input_id}"),
         uuid: input_id.to_string(),
     }))
 }
@@ -342,7 +353,7 @@ async fn receipt_upload(
 ) -> Result<Json<UploadRes>, AppError> {
     let receipt_id = Uuid::new_v4();
     Ok(Json(UploadRes {
-        url: format!("http://{hostname}/receipts/upload/{receipt_id}"),
+        url: format!("http://{hostname}{PROXY_URL_PATH}/receipts/upload/{receipt_id}"),
         uuid: receipt_id.to_string(),
     }))
 }
@@ -403,12 +414,13 @@ async fn prove_stark(
     let reply = state
         .manager
         .ask(CreateJobRequest {
-            request: ProofRequest {
+            request: JobRequest::Proof(ProofRequest {
                 binary,
                 input,
                 assumptions,
                 segment_limit_po2: state.po2,
-            },
+                execute_only: proof_req.execute_only,
+            }),
         })
         .await
         .context("Failed to create job")?;
@@ -418,19 +430,30 @@ async fn prove_stark(
     }))
 }
 
-async fn stark_status(
-    State(state): State<Arc<AppState>>,
-    Host(hostname): Host,
-    Path(job_id): Path<Uuid>,
-    ExtractApiKey(api_key): ExtractApiKey,
-) -> Result<Json<SessionStatusRes>, AppError> {
-    let info = state
+struct ApiJobStatus<ResultT> {
+    state: Option<String>,
+    status: String,
+    error_msg: Option<String>,
+    elapsed_time: Option<f64>,
+    result: Option<ResultT>,
+}
+
+async fn get_job_status<ResultT>(
+    state: &AppState,
+    job_id: &Uuid,
+) -> Result<ApiJobStatus<ResultT>, AppError>
+where
+    JobInfo<ResultT>: TryFrom<JobStatusReply>,
+{
+    let info: JobInfo<ResultT> = state
         .manager
-        .ask(JobStatusRequest { job_id })
+        .ask(JobStatusRequest { job_id: *job_id })
         .await
+        .map_err(ActorError::from)
+        .flatten()
         .context("Failed to get job status")?
-        .info
-        .ok_or(AppError::InternalErr(anyhow!("Invalid job_id")))?;
+        .try_into()
+        .map_err(|_| AppError::InternalErr(anyhow!("Invalid job_id")))?;
 
     let state = if let JobStatus::Running(ref state) = info.status {
         Some(state.clone())
@@ -446,39 +469,81 @@ async fn stark_status(
         None
     };
 
-    let (stats, receipt_url) = if let JobStatus::Succeeded(ref result) = info.status {
+    let status = info.status.bonsai_status().to_string();
+    let elapsed_time = Some(info.elapsed_time.as_secs_f64());
+
+    let result = if let JobStatus::Succeeded(result) = info.status {
+        Some(result)
+    } else {
+        None
+    };
+
+    Ok(ApiJobStatus {
+        state,
+        error_msg,
+        status,
+        elapsed_time,
+        result,
+    })
+}
+
+async fn stark_status(
+    State(state): State<Arc<AppState>>,
+    Host(hostname): Host,
+    Path(job_id): Path<Uuid>,
+    ExtractApiKey(api_key): ExtractApiKey,
+) -> Result<Json<SessionStatusRes>, AppError> {
+    let status = get_job_status::<ProofResult>(&state, &job_id).await?;
+
+    let (stats, receipt_url) = if let Some(result) = status.result {
         let stats = SessionStats {
             segments: result.session.stats.segments,
             total_cycles: result.session.stats.total_cycles,
             cycles: result.session.stats.user_cycles,
         };
-        let receipt_url = format!("http://{hostname}/receipts/stark/receipt/{job_id}");
-        (Some(stats), Some(receipt_url))
+        let receipt_url = result
+            .receipt
+            .is_some()
+            .then(|| format!("http://{hostname}{PROXY_URL_PATH}/receipts/stark/receipt/{job_id}"));
+        (Some(stats), receipt_url)
     } else {
         (None, None)
     };
-
     Ok(Json(SessionStatusRes {
-        state,
+        state: status.state,
         receipt_url,
-        error_msg,
-        status: info.status.bonsai_status().to_string(),
-        elapsed_time: Some(info.elapsed_time.as_secs_f64()),
+        error_msg: status.error_msg,
+        status: status.status,
+        elapsed_time: status.elapsed_time,
         stats,
     }))
 }
 
-async fn stark_download(
-    State(state): State<Arc<AppState>>,
-    Path(job_id): Path<Uuid>,
-) -> Result<Vec<u8>, AppError> {
+fn get_receipt_path(state: &AppState, job_id: &Uuid) -> Result<PathBuf, AppError> {
     let job_id = job_id.to_string();
     let receipt_path = validate_path(&state.receipts_dir(), &job_id)
         .ok_or_else(|| AppError::InternalErr(anyhow!("Invalid job_id")))?;
     if !receipt_path.exists() {
         return Err(AppError::ReceiptMissing(job_id));
     }
+    Ok(receipt_path)
+}
 
+fn get_journal_path(state: &AppState, job_id: &Uuid) -> Result<PathBuf, AppError> {
+    let job_id = job_id.to_string();
+    let journal_path = validate_path(&state.journals_dir(), &job_id)
+        .ok_or_else(|| AppError::InternalErr(anyhow!("Invalid job_id")))?;
+    if !journal_path.exists() {
+        return Err(AppError::JournalMissing(job_id));
+    }
+    Ok(journal_path)
+}
+
+async fn stark_download(
+    State(state): State<Arc<AppState>>,
+    Path(job_id): Path<Uuid>,
+) -> Result<Vec<u8>, AppError> {
+    let receipt_path = get_receipt_path(&state, &job_id)?;
     let receipt = tokio::fs::read(receipt_path)
         .await
         .context("Failed to read receipt from object store")?;
@@ -491,15 +556,9 @@ async fn receipt_download(
     Path(job_id): Path<Uuid>,
     Host(hostname): Host,
 ) -> Result<Json<ReceiptDownload>, AppError> {
-    let job_id = job_id.to_string();
-    let receipt_path = validate_path(&state.receipts_dir(), &job_id)
-        .ok_or_else(|| AppError::InternalErr(anyhow!("Invalid job_id")))?;
-    if !receipt_path.exists() {
-        return Err(AppError::ReceiptMissing(job_id));
-    }
-
+    let _receipt_path = get_receipt_path(&state, &job_id)?;
     Ok(Json(ReceiptDownload {
-        url: format!("http://{hostname}/receipts/stark/receipt/{job_id}"),
+        url: format!("http://{hostname}{PROXY_URL_PATH}/receipts/stark/receipt/{job_id}"),
     }))
 }
 
@@ -507,24 +566,13 @@ async fn preflight_journal(
     State(state): State<Arc<AppState>>,
     Path(job_id): Path<Uuid>,
 ) -> Result<Vec<u8>, AppError> {
-    // let journal_key = format!("{PREFLIGHT_JOURNALS_BUCKET_DIR}/{job_id}.bin");
-    // if !state
-    //     .s3_client
-    //     .object_exists(&journal_key)
-    //     .await
-    //     .context("Failed to check if object exists")?
-    // {
-    //     return Err(AppError::ReceiptMissing(job_id.to_string()));
-    // }
+    let journal_path = get_journal_path(&state, &job_id)?;
 
-    // let receipt = state
-    //     .s3_client
-    //     .read_buf_from_s3(&journal_key)
-    //     .await
-    //     .context("Failed to read from object store")?;
+    let journal = tokio::fs::read(journal_path)
+        .await
+        .context("Failed to read journal from object store")?;
 
-    // Ok(receipt)
-    todo!()
+    Ok(journal)
 }
 
 // Snark routes
@@ -532,41 +580,33 @@ async fn preflight_journal(
 async fn prove_groth16(
     State(state): State<Arc<AppState>>,
     ExtractApiKey(api_key): ExtractApiKey,
-    Json(start_req): Json<SnarkReq>,
+    Json(snark_req): Json<SnarkReq>,
 ) -> Result<Json<CreateSessRes>, AppError> {
-    // let (
-    //     _aux_stream,
-    //     _exec_stream,
-    //     _gpu_prove_stream,
-    //     _gpu_coproc_stream,
-    //     _gpu_join_stream,
-    //     snark_stream,
-    // ) = helpers::get_or_create_streams(&state.db_pool, &api_key)
-    //     .await
-    //     .context("Failed to get / create steams")?;
+    let job_id = snark_req
+        .session_id
+        .parse()
+        .map_err(|_| AppError::InternalErr(anyhow!("Invalid job_id")))?;
+    let receipt_path = get_receipt_path(&state, &job_id)?;
+    let receipt_bytes = tokio::fs::read(receipt_path)
+        .await
+        .context("Failed to read receipt from object store")?;
+    let receipt: Receipt =
+        bincode::deserialize(&receipt_bytes).context("Failed to deserialize receipt")?;
 
-    // let task_def = serde_json::to_value(TaskType::Snark(WorkflowSnarkReq {
-    //     receipt: start_req.session_id,
-    //     compress_type: CompressType::Groth16,
-    // }))
-    // .context("Failed to serialize ExecutorReq")?;
+    let reply = state
+        .manager
+        .ask(CreateJobRequest {
+            request: JobRequest::ShrinkWrap(ShrinkWrapRequest {
+                kind: ShrinkWrapKind::Groth16,
+                receipt,
+            }),
+        })
+        .await
+        .context("Failed to create job")?;
 
-    // let job_id = taskdb::create_job(
-    //     &state.db_pool,
-    //     &snark_stream,
-    //     &task_def,
-    //     state.snark_retries,
-    //     state.snark_timeout,
-    //     &api_key,
-    // )
-    // .await
-    // .context("Failed to create exec / init task")?;
-
-    // Ok(Json(CreateSessRes {
-    //     uuid: job_id.to_string(),
-    // }))
-
-    todo!()
+    Ok(Json(CreateSessRes {
+        uuid: reply.job_id.to_string(),
+    }))
 }
 
 async fn groth16_status(
@@ -575,38 +615,24 @@ async fn groth16_status(
     Path(job_id): Path<Uuid>,
     Host(hostname): Host,
 ) -> Result<Json<SnarkStatusRes>, AppError> {
-    // let job_state = taskdb::get_job_state(&state.db_pool, &job_id, &api_key)
-    //     .await
-    //     .context("Failed to get job state")?;
-    // let (error_msg, output) = match job_state {
-    //     JobState::Running => (None, None),
-    //     JobState::Done => (
-    //         None,
-    //         Some(format!(
-    //             "http://{hostname}/receipts/groth16/receipt/{job_id}"
-    //         )),
-    //     ),
-    //     JobState::Failed => (None, None), // TODO error message
-    // };
-    // Ok(Json(SnarkStatusRes {
-    //     status: job_state.to_string(),
-    //     error_msg,
-    //     output,
-    // }))
+    let status = get_job_status::<ShrinkWrapResult>(&state, &job_id).await?;
 
-    todo!()
+    let output = status
+        .result
+        .is_some()
+        .then(|| format!("http://{hostname}{PROXY_URL_PATH}/receipts/groth16/receipt/{job_id}"));
+    Ok(Json(SnarkStatusRes {
+        output,
+        error_msg: status.error_msg,
+        status: status.status,
+    }))
 }
 
 async fn groth16_download(
     State(state): State<Arc<AppState>>,
     Path(job_id): Path<Uuid>,
 ) -> Result<Vec<u8>, AppError> {
-    let job_id = job_id.to_string();
-    let receipt_path = validate_path(&state.receipts_dir(), &job_id)
-        .ok_or_else(|| AppError::InternalErr(anyhow!("Invalid job_id")))?;
-    if !receipt_path.exists() {
-        return Err(AppError::ReceiptMissing(job_id));
-    }
+    let receipt_path = get_receipt_path(&state, &job_id)?;
 
     let receipt = tokio::fs::read(receipt_path)
         .await
@@ -639,7 +665,7 @@ pub(crate) async fn run(
     storage_root: PathBuf,
     manager: ActorRef<ManagerActor>,
     po2: Option<u32>,
-) -> Result<()> {
+) -> Result<SocketAddr> {
     let app_state = AppState::new(storage_root, manager, po2)
         .await
         .context("Failed to initialize AppState")?;
@@ -647,16 +673,20 @@ pub(crate) async fn run(
         .await
         .context("Failed to bind a TCP listener")?;
 
-    tracing::info!("REST API listening on: {addr}");
-    axum::serve(listener, self::app(app_state))
-        .with_graceful_shutdown(shutdown_signal())
-        .await
-        .context("REST API service failed")?;
+    let addr = listener.local_addr()?;
+    tracing::info!("Manager version-specific REST API listening on: {addr}");
 
-    Ok(())
+    tokio::spawn(async move {
+        axum::serve(listener, self::app(app_state))
+            .with_graceful_shutdown(shutdown_signal())
+            .await
+            .expect("REST API service shouldn't fail");
+    });
+
+    Ok(addr)
 }
 
-async fn shutdown_signal() {
+pub async fn shutdown_signal() {
     let ctrl_c = async {
         tokio::signal::ctrl_c()
             .await

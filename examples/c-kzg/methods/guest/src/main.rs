@@ -1,16 +1,18 @@
-// Copyright 2024 RISC Zero, Inc.
+// Copyright 2025 RISC Zero, Inc.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
+// Licensed under the Apache License, Version 2.0, <LICENSE-APACHE or
+// http://apache.org/licenses/LICENSE-2.0> or the MIT license <LICENSE-MIT or
+// http://opensource.org/licenses/MIT>, at your option. This file may not be
+// copied, modified, or distributed except according to those terms.
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+//
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+
 use c_kzg::{Bytes32, Bytes48, KzgCommitment, KzgProof, KzgSettings};
 use c_kzg_core::Proof;
 use risc0_zkvm::guest::env;
@@ -26,11 +28,11 @@ pub fn kzg_to_versioned_hash(commitment: &KzgCommitment) -> [u8; 32] {
     res.into()
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 // TODO ideally this is c_size_t, but not stabilized (not guaranteed to be usize on all archs)
 unsafe extern "C" fn malloc(size: usize) -> *mut c_void {
     let layout = Layout::from_size_align(size, 4).expect("unable to allocate more memory");
-    let ptr = alloc(layout);
+    let ptr = unsafe { alloc(layout) };
 
     if ptr.is_null() {
         handle_alloc_error(layout);
@@ -39,13 +41,13 @@ unsafe extern "C" fn malloc(size: usize) -> *mut c_void {
     ptr as *mut c_void
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 // TODO shouldn't need to zero allocated bytes since the zkvm memory is zeroed, might want to zero anyway
 unsafe extern "C" fn calloc(nobj: usize, size: usize) -> *mut c_void {
-    malloc(nobj * size)
+    unsafe { malloc(nobj * size) }
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 unsafe extern "C" fn free(_size: *const c_void) {
     // Intentionally a no-op, since the zkvm allocator is a bump allocator
 }

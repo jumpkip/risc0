@@ -1,28 +1,29 @@
 // Copyright 2025 RISC Zero, Inc.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
+// Licensed under the Apache License, Version 2.0, <LICENSE-APACHE or
+// http://apache.org/licenses/LICENSE-2.0> or the MIT license <LICENSE-MIT or
+// http://opensource.org/licenses/MIT>, at your option. This file may not be
+// copied, modified, or distributed except according to those terms.
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+//
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 
 #![cfg(feature = "prove")]
 
 use risc0_circuit_keccak::{
-    prove::zkr::get_keccak_zkr, KECCAK_CONTROL_IDS, KECCAK_CONTROL_ROOT, KECCAK_PO2_RANGE,
+    KECCAK_CONTROL_IDS, KECCAK_CONTROL_ROOT, KECCAK_PO2_RANGE, prove::zkr::get_keccak_zkr,
 };
 use risc0_circuit_keccak_methods::{KECCAK_ELF, KECCAK_ID};
 use risc0_zkp::{
     core::{digest::Digest, hash::poseidon2::Poseidon2HashSuite},
     digest,
 };
-use risc0_zkvm::{get_prover_server, recursion::MerkleGroup, ExecutorEnv, ProverOpts};
+use risc0_zkvm::{ExecutorEnv, ProverOpts, get_prover_server, recursion::MerkleGroup};
 
 fn run_test(po2: u32, claim_digest: Digest) {
     let to_guest: (Digest, u32) = (claim_digest, po2);
@@ -42,12 +43,14 @@ fn run_test(po2: u32, claim_digest: Digest) {
 
     // Make sure this receipt actually depends on the assumption;
     // otherwise this test might give a false negative.
-    assert!(!receipt
-        .inner
-        .composite()
-        .unwrap()
-        .assumption_receipts
-        .is_empty());
+    assert!(
+        !receipt
+            .inner
+            .composite()
+            .unwrap()
+            .assumption_receipts
+            .is_empty()
+    );
 
     // Make sure the receipt verifies OK
     receipt.verify(KECCAK_ID).unwrap();

@@ -1,25 +1,26 @@
 // Copyright 2025 RISC Zero, Inc.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
+// Licensed under the Apache License, Version 2.0, <LICENSE-APACHE or
+// http://apache.org/licenses/LICENSE-2.0> or the MIT license <LICENSE-MIT or
+// http://opensource.org/licenses/MIT>, at your option. This file may not be
+// copied, modified, or distributed except according to those terms.
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+//
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 
 //! A SHA-256 based CRNG used in Fiat-Shamir.
 
 use alloc::boxed::Box;
 
-use rand_core::{impls, RngCore};
+use rand_core::{RngCore, impls};
 use risc0_core::field::{Elem, Field};
 
-use super::{Digest, Impl, Sha256, DIGEST_WORDS};
+use super::{DIGEST_WORDS, Digest, Impl, Sha256};
 use crate::core::hash::Rng;
 
 /// A random number generator driven by a [Sha256].
@@ -106,7 +107,7 @@ mod tests {
     use rand_core::RngCore;
 
     use super::ShaRng;
-    use crate::core::hash::sha::{cpu::Impl, Sha256};
+    use crate::core::hash::sha::{Sha256, cpu::Impl};
 
     // Runs conformance test on a SHA implementation to make sure it
     // properly behaves for generating pseudo-random numbers.

@@ -1,44 +1,46 @@
 // Copyright 2025 RISC Zero, Inc.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
+// Licensed under the Apache License, Version 2.0, <LICENSE-APACHE or
+// http://apache.org/licenses/LICENSE-2.0> or the MIT license <LICENSE-MIT or
+// http://opensource.org/licenses/MIT>, at your option. This file may not be
+// copied, modified, or distributed except according to those terms.
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+//
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 
 use std::rc::Rc;
 
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use risc0_circuit_recursion_sys::{
+    RawAccumBuffers, RawExecBuffers, RawPreflightTrace, StepMode,
     risc0_circuit_recursion_cpu_accum, risc0_circuit_recursion_cpu_eval_check,
-    risc0_circuit_recursion_cpu_witgen, RawAccumBuffers, RawExecBuffers, RawPreflightTrace,
-    StepMode,
+    risc0_circuit_recursion_cpu_witgen,
 };
 use risc0_sys::ffi_wrap;
 use risc0_zkp::{
+    INV_RATE,
     core::{
         hash::{
-            poseidon2::Poseidon2HashSuite, poseidon_254::Poseidon254HashSuite, sha::Sha256HashSuite,
+            poseidon_254::Poseidon254HashSuite, poseidon2::Poseidon2HashSuite, sha::Sha256HashSuite,
         },
         log2_ceil,
     },
     field::{
+        RootsOfUnity as _,
         baby_bear::{BabyBear, BabyBearElem, BabyBearExtElem},
-        map_pow, RootsOfUnity as _,
+        map_pow,
     },
-    hal::{cpu::CpuBuffer, AccumPreflight, CircuitHal},
-    INV_RATE,
+    hal::{AccumPreflight, CircuitHal, cpu::CpuBuffer},
 };
 
 use crate::{
-    prove::{RecursionProver, RecursionProverImpl},
     GLOBAL_MIX, GLOBAL_OUT, REGISTER_GROUP_ACCUM, REGISTER_GROUP_CTRL, REGISTER_GROUP_DATA,
+    prove::{RecursionProver, RecursionProverImpl},
 };
 
 use super::{CircuitAccumulator, CircuitWitnessGenerator};

@@ -1,16 +1,17 @@
-// Copyright 2024 RISC Zero, Inc.
+// Copyright 2025 RISC Zero, Inc.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
+// Licensed under the Apache License, Version 2.0, <LICENSE-APACHE or
+// http://apache.org/licenses/LICENSE-2.0> or the MIT license <LICENSE-MIT or
+// http://opensource.org/licenses/MIT>, at your option. This file may not be
+// copied, modified, or distributed except according to those terms.
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+//
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 
 //! An implementation of Poseidon2 targeting the Baby Bear.
 
@@ -22,15 +23,15 @@ mod rng;
 use alloc::{boxed::Box, rc::Rc, vec::Vec};
 
 use risc0_core::field::{
-    baby_bear::{BabyBear, BabyBearElem, BabyBearExtElem},
     Elem, ExtElem,
+    baby_bear::{BabyBear, BabyBearElem, BabyBearExtElem},
 };
 
 use super::{HashFn, HashSuite, Rng, RngFactory};
-use crate::core::digest::{Digest, DIGEST_WORDS};
+use crate::core::digest::{DIGEST_WORDS, Digest};
 
 pub use self::{
-    consts::{CELLS, M_INT_DIAG_HZN, ROUNDS_HALF_FULL, ROUNDS_PARTIAL, ROUND_CONSTANTS},
+    consts::{CELLS, M_INT_DIAG_HZN, ROUND_CONSTANTS, ROUNDS_HALF_FULL, ROUNDS_PARTIAL},
     rng::Poseidon2Rng,
 };
 

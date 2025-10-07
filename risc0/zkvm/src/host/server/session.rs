@@ -1,38 +1,39 @@
 // Copyright 2025 RISC Zero, Inc.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
+// Licensed under the Apache License, Version 2.0, <LICENSE-APACHE or
+// http://apache.org/licenses/LICENSE-2.0> or the MIT license <LICENSE-MIT or
+// http://opensource.org/licenses/MIT>, at your option. This file may not be
+// copied, modified, or distributed except according to those terms.
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+//
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 
 //! This module defines [Session] and [Segment] which provides a way to share
 //! execution traces between the execution phase and the proving phase.
 
 use std::{collections::BTreeSet, fs, path::PathBuf, time::Duration};
 
-use anyhow::{ensure, Context, Result};
+use anyhow::{Context, Result, ensure};
 use enum_map::EnumMap;
 use risc0_binfmt::{PovwJobId, SystemState};
-use risc0_circuit_keccak::{compute_keccak_digest, KECCAK_CONTROL_ROOT};
+use risc0_circuit_keccak::{KECCAK_CONTROL_ROOT, compute_keccak_digest};
 use risc0_circuit_rv32im::{EcallKind, EcallMetric, TerminateState};
 use serde::{Deserialize, Serialize};
 
 use crate::{
+    Assumption, AssumptionReceipt, Assumptions, ExitCode, Journal, MaybePruned, Output,
+    ReceiptClaim, SegmentInfo, Work,
     host::{
         client::env::{ProveKeccakRequest, SegmentPath},
         prove_info::{SessionStats, SyscallKind, SyscallMetric},
     },
     mmr::{GuestPeak, MerkleMountainAccumulator},
     sha::Digest,
-    Assumption, AssumptionReceipt, Assumptions, ExitCode, Journal, MaybePruned, Output,
-    ReceiptClaim, Work,
 };
 
 #[derive(Clone, Default, Serialize, Deserialize, Debug)]
@@ -139,6 +140,14 @@ impl Segment {
 
     pub(crate) fn user_cycles(&self) -> u32 {
         self.inner.suspend_cycle
+    }
+
+    /// Construct a `SegmentInfo` containing information about this segment.
+    pub fn get_info(&self) -> SegmentInfo {
+        SegmentInfo {
+            po2: self.po2() as u32,
+            cycles: self.user_cycles(),
+        }
     }
 }
 
@@ -257,10 +266,10 @@ impl Session {
             .filter_map(|(_, receipt)| match receipt {
                 AssumptionReceipt::Proven(_) => None,
                 AssumptionReceipt::Unresolved(assumption) => {
-                    if let Some(ref keccak) = keccak_root_assumption {
-                        if keccak == assumption {
-                            return None;
-                        }
+                    if let Some(ref keccak) = keccak_root_assumption
+                        && keccak == assumption
+                    {
+                        return None;
                     }
                     Some(assumption.clone())
                 }

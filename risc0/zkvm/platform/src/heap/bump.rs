@@ -1,24 +1,25 @@
 // Copyright 2025 RISC Zero, Inc.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
+// Licensed under the Apache License, Version 2.0, <LICENSE-APACHE or
+// http://apache.org/licenses/LICENSE-2.0> or the MIT license <LICENSE-MIT or
+// http://opensource.org/licenses/MIT>, at your option. This file may not be
+// copied, modified, or distributed except according to those terms.
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+//
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 
-use crate::{memory::GUEST_MAX_MEM, syscall::sys_panic, WORD_SIZE};
+use crate::{WORD_SIZE, memory::GUEST_MAX_MEM, syscall::sys_panic};
 use core::alloc::{GlobalAlloc, Layout};
 
 #[global_allocator]
 pub static HEAP: BumpPointerAlloc = BumpPointerAlloc;
 
-extern "C" {
+unsafe extern "C" {
     // This symbol is defined by the loader and marks the end
     // of all elf sections, so this is where we start our
     // heap.
@@ -40,7 +41,7 @@ pub struct BumpPointerAlloc;
 
 unsafe impl GlobalAlloc for BumpPointerAlloc {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-        alloc_aligned(layout.size(), layout.align())
+        unsafe { alloc_aligned(layout.size(), layout.align()) }
     }
 
     unsafe fn dealloc(&self, _: *mut u8, _: Layout) {
@@ -50,7 +51,7 @@ unsafe impl GlobalAlloc for BumpPointerAlloc {
     unsafe fn alloc_zeroed(&self, layout: Layout) -> *mut u8 {
         // NOTE: This is safe to avoid zeroing allocated bytes, as the bump allocator does not
         //       re-use memory and the zkVM memory is zero-initialized.
-        self.alloc(layout)
+        unsafe { self.alloc(layout) }
     }
 }
 
@@ -104,7 +105,7 @@ pub(crate) unsafe fn alloc_aligned(bytes: usize, align: usize) -> *mut u8 {
 ///
 /// This function must be called exactly once.
 pub unsafe fn init() {
-    extern "C" {
+    unsafe extern "C" {
         static _end: u8;
     }
     unsafe {

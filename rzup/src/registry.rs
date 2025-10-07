@@ -1,16 +1,18 @@
 // Copyright 2025 RISC Zero, Inc.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
+// Licensed under the Apache License, Version 2.0, <LICENSE-APACHE or
+// http://apache.org/licenses/LICENSE-2.0> or the MIT license <LICENSE-MIT or
+// http://opensource.org/licenses/MIT>, at your option. This file may not be
+// copied, modified, or distributed except according to those terms.
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+//
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+
 use crate::components::{self, Component};
 use crate::env::Environment;
 use crate::error::Result;
@@ -115,18 +117,18 @@ impl Registry {
         component: &Component,
     ) -> Result<Option<(Version, std::path::PathBuf)>> {
         let component_installed = component.parent_component().unwrap_or(*component);
-        if let Some(version) = self.settings.get_default_version(component) {
-            if let Some(path) = Paths::find_version_dir(env, &component_installed, &version)? {
-                return Ok(Some((version, path)));
-            }
+        if let Some(version) = self.settings.get_default_version(component)
+            && let Some(path) = Paths::find_version_dir(env, &component_installed, &version)?
+        {
+            return Ok(Some((version, path)));
         }
 
         // Components installed by old versions might leave us in a state where there is a
         // component installed, but no active version
-        if let Some(version) = self.find_highest_installed_version(env, component)? {
-            if let Some(path) = Paths::find_version_dir(env, &component_installed, &version)? {
-                return Ok(Some((version, path)));
-            }
+        if let Some(version) = self.find_highest_installed_version(env, component)?
+            && let Some(path) = Paths::find_version_dir(env, &component_installed, &version)?
+        {
+            return Ok(Some((version, path)));
         }
 
         Ok(None)
@@ -195,21 +197,20 @@ impl Registry {
 
         let _lock_file = env.flock(&format!(".{component_to_install}-{version}"))?;
 
-        if !force {
-            if let Some(path) = Paths::find_version_dir(env, &component_to_install, &version)? {
-                env.emit(RzupEvent::ComponentAlreadyInstalled {
-                    id: component.to_string(),
-                    version: version.to_string(),
-                });
-                env.emit(RzupEvent::Debug {
-                    message: format!(
-                        "Component {component} already installed at path {}",
-                        path.display()
-                    ),
-                });
-                self.set_default_component_version(env, component, version.clone())?;
-                return Ok(());
-            }
+        if !force && let Some(path) = Paths::find_version_dir(env, &component_to_install, &version)?
+        {
+            env.emit(RzupEvent::ComponentAlreadyInstalled {
+                id: component.to_string(),
+                version: version.to_string(),
+            });
+            env.emit(RzupEvent::Debug {
+                message: format!(
+                    "Component {component} already installed at path {}",
+                    path.display()
+                ),
+            });
+            self.set_default_component_version(env, component, version.clone())?;
+            return Ok(());
         }
 
         components::install(component, env, &self.base_urls, &version, force)?;
@@ -227,7 +228,7 @@ impl Registry {
         Ok(())
     }
 
-    pub fn install_all_components(&mut self, env: &Environment, force: bool) -> Result<()> {
+    pub fn install_default_components(&mut self, env: &Environment, force: bool) -> Result<()> {
         for component in Component::iter().filter(|c| c.install_by_default()) {
             self.install_component(env, &component, None, force)?;
         }
@@ -264,10 +265,9 @@ impl Registry {
             .settings
             .get_default_version(component)
             .is_some_and(|version| &version == removed_version)
+            && let Some(new_version) = self.find_highest_installed_version(env, component)?
         {
-            if let Some(new_version) = self.find_highest_installed_version(env, component)? {
-                self.set_default_component_version(env, component, new_version)?;
-            }
+            self.set_default_component_version(env, component, new_version)?;
         }
         Ok(())
     }

@@ -1,23 +1,28 @@
 // Copyright 2025 RISC Zero, Inc.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
+// Licensed under the Apache License, Version 2.0, <LICENSE-APACHE or
+// http://apache.org/licenses/LICENSE-2.0> or the MIT license <LICENSE-MIT or
+// http://opensource.org/licenses/MIT>, at your option. This file may not be
+// copied, modified, or distributed except according to those terms.
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+//
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+
+//! Precomputation of prover parameters from the Circom-formatted stark_verify_final.zkey (created
+//! via trusted setup ceremony) and the stark_verify.circom circuit.
 
 use std::path::PathBuf;
 
 use clap::Parser;
-use risc0_groth16_sys::{SetupParams, WitnessParams};
-use rlimit::{setrlimit, Resource, INFINITY};
-use xshell::{cmd, Shell};
+use memmap2::{Mmap, MmapMut};
+use risc0_groth16_sys::SetupParams;
+use rlimit::{INFINITY, Resource, setrlimit};
+use xshell::{Shell, cmd};
 
 #[derive(Debug, Parser)]
 pub struct SetupGroth16 {
@@ -39,10 +44,9 @@ impl SetupGroth16 {
         let setup_dir = work_dir.join("v0.1.0-risc0-groth16");
         sh.create_dir(&setup_dir).unwrap();
 
-        let setup_params = SetupParams::new(&setup_dir).unwrap();
-        let witness_params = WitnessParams::new(&setup_dir);
-        if !sh.path_exists(setup_params.srs_path.as_path()) {
-            let mut zkey_gz_path = setup_params.srs_path.as_path().to_path_buf();
+        let srs_path = setup_dir.join("stark_verify_final.zkey");
+        if !sh.path_exists(srs_path.as_path()) {
+            let mut zkey_gz_path = srs_path.as_path().to_path_buf();
             zkey_gz_path.set_extension("zkey.gz");
             let url = "https://risc0-artifacts.s3.us-west-2.amazonaws.com/zkey/2024-05-17.1/stark_verify_final.zkey.gz";
             cmd!(sh, "curl -o {zkey_gz_path} {url}").run().unwrap();
@@ -77,14 +81,53 @@ impl SetupGroth16 {
         }
 
         // stark_verify.circom -> stark_verify_graph.bin
-        let graph_path = &witness_params.graph_path;
-        if !sh.path_exists(graph_path) {
+        let graph_path = setup_dir.join("stark_verify_graph.bin");
+        if !sh.path_exists(&graph_path) {
             cmd!(sh, "{build_circuit} {stark_verify_circom} {graph_path}")
                 .run()
                 .unwrap();
         }
 
         // stark_verify_final.zkey -> (fuzzed_msm_results.bin, preprocessed_coeffs.bin)
-        risc0_groth16_sys::setup(&setup_params).unwrap();
+        let srs_file = std::fs::File::open(&srs_path).unwrap();
+
+        let fuzzed_results_file = std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .open(setup_dir.join("fuzzed_msm_results.bin"))
+            .unwrap();
+        fuzzed_results_file.set_len(1024).unwrap();
+
+        let preprocessed_coeffs_file = std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .open(setup_dir.join("preprocessed_coeffs.bin"))
+            .unwrap();
+        preprocessed_coeffs_file
+            .set_len(2 * 1024 * 1024 * 1024)
+            .unwrap();
+
+        let (fuzzed_results_size, preprocessed_coeffs_size) = {
+            let srs = unsafe { Mmap::map(&srs_file).unwrap() };
+            let mut fuzzed_results = unsafe { MmapMut::map_mut(&fuzzed_results_file).unwrap() };
+            let mut preprocessed_coeffs =
+                unsafe { MmapMut::map_mut(&preprocessed_coeffs_file).unwrap() };
+            let mut setup_params = SetupParams {
+                srs: &srs[..],
+                fuzzed_results_out: &mut fuzzed_results[..],
+                preprocessed_coeffs_out: &mut preprocessed_coeffs[..],
+            };
+            risc0_groth16_sys::setup(&mut setup_params).unwrap()
+        };
+        fuzzed_results_file
+            .set_len(fuzzed_results_size as u64)
+            .unwrap();
+        preprocessed_coeffs_file
+            .set_len(preprocessed_coeffs_size as u64)
+            .unwrap();
     }
 }

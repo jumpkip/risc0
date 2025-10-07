@@ -1,31 +1,32 @@
 // Copyright 2025 RISC Zero, Inc.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
+// Licensed under the Apache License, Version 2.0, <LICENSE-APACHE or
+// http://apache.org/licenses/LICENSE-2.0> or the MIT license <LICENSE-MIT or
+// http://opensource.org/licenses/MIT>, at your option. This file may not be
+// copied, modified, or distributed except according to those terms.
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+//
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 
 use std::{borrow::Borrow, collections::HashSet, fmt::Write, process::Command};
 
 use clap::Parser;
-use risc0_circuit_keccak::{prove::zkr::get_keccak_zkr, KECCAK_PO2_RANGE};
+use risc0_circuit_keccak::{KECCAK_PO2_RANGE, prove::zkr::get_keccak_zkr};
 use risc0_circuit_recursion::prove::zkr::{get_all_zkrs, get_zkr};
 use risc0_zkp::core::{
     digest::Digest,
     hash::{
-        hash_suite_from_name, poseidon2::Poseidon2HashSuite, poseidon_254::Poseidon254HashSuite,
+        hash_suite_from_name, poseidon_254::Poseidon254HashSuite, poseidon2::Poseidon2HashSuite,
     },
 };
 use risc0_zkvm::{
-    recursion::{MerkleGroup, Program},
     DEFAULT_MAX_PO2, RECURSION_PO2,
+    recursion::{MerkleGroup, Program},
 };
 
 #[derive(Parser)]
@@ -47,7 +48,7 @@ impl Bootstrap {
         out
     }
 
-    // Format a list of control IDs, include the names as data in a tuple of (&str, Digest)
+    // Format a list of control IDs, including the names as data in a tuple of (&str, Digest)
     fn format_control_ids_with_name(
         ids: impl IntoIterator<Item = impl Borrow<(String, Digest)>>,
     ) -> String {
@@ -68,7 +69,7 @@ impl Bootstrap {
         Command::new("rustfmt")
             .arg(path)
             .status()
-            .expect("failed to format {path}");
+            .unwrap_or_else(|_| panic!("failed to format {path}"));
     }
 
     fn generate_recursion_control_ids() {

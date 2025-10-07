@@ -1,16 +1,17 @@
 // Copyright 2025 RISC Zero, Inc.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
+// Licensed under the Apache License, Version 2.0, <LICENSE-APACHE or
+// http://apache.org/licenses/LICENSE-2.0> or the MIT license <LICENSE-MIT or
+// http://opensource.org/licenses/MIT>, at your option. This file may not be
+// copied, modified, or distributed except according to those terms.
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+//
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 
 //! Cryptographic algorithms for verifying a ZK proof of compute
 
@@ -31,13 +32,13 @@ pub use read_iop::ReadIOP;
 use risc0_core::field::{Elem, ExtElem, Field, RootsOfUnity};
 
 use crate::{
+    INV_RATE, MAX_CYCLES_PO2, QUERIES,
     adapter::{
-        CircuitCoreDef, ProtocolInfo, PROOF_SYSTEM_INFO, REGISTER_GROUP_ACCUM, REGISTER_GROUP_CODE,
-        REGISTER_GROUP_DATA,
+        CircuitCoreDef, CircuitCoreDefV3, PROOF_SYSTEM_INFO, ProtocolInfo, REGISTER_GROUP_ACCUM,
+        REGISTER_GROUP_CODE, REGISTER_GROUP_DATA,
     },
     core::{digest::Digest, hash::HashSuite, log2_ceil},
     taps::TapSet,
-    INV_RATE, MAX_CYCLES_PO2, QUERIES,
 };
 
 // If true, enable tracing of verifier internals.
@@ -113,21 +114,36 @@ impl fmt::Display for VerificationError {
                 write!(f, "journal digest mismatch detected")
             }
             VerificationError::ClaimDigestMismatch { expected, received } => {
-                write!(f, "claim digest does not match the expected digest {received}; expected {expected}")
+                write!(
+                    f,
+                    "claim digest does not match the expected digest {received}; expected {expected}"
+                )
             }
             VerificationError::UnexpectedExitCode => write!(f, "unexpected exit_code"),
             VerificationError::InvalidHashSuite => write!(f, "invalid hash suite"),
             VerificationError::VerifierParametersMissing => {
-                write!(f, "verifier parameters were not found in verifier context for the given receipt type")
+                write!(
+                    f,
+                    "verifier parameters were not found in verifier context for the given receipt type"
+                )
             }
             VerificationError::VerifierParametersMismatch { expected, received } => {
-                write!(f, "receipt was produced for a version of the verifier with parameters digest {received}; expected {expected}")
+                write!(
+                    f,
+                    "receipt was produced for a version of the verifier with parameters digest {received}; expected {expected}"
+                )
             }
             VerificationError::ProofSystemInfoMismatch { expected, received } => {
-                write!(f, "receipt was produced for a version of the verifier with proof system info {received}; expected {expected}")
+                write!(
+                    f,
+                    "receipt was produced for a version of the verifier with proof system info {received}; expected {expected}"
+                )
             }
             VerificationError::CircuitInfoMismatch { expected, received } => {
-                write!(f, "receipt was produced for a version of the verifier with circuit info {received}; expected {expected}")
+                write!(
+                    f,
+                    "receipt was produced for a version of the verifier with circuit info {received}; expected {expected}"
+                )
             }
             VerificationError::UnresolvedAssumption { digest } => {
                 write!(f, "receipt contains an unresolved assumption: {digest}")
@@ -170,7 +186,7 @@ impl<'a, F: Field> Verifier<'a, F> {
             po2: 0,
             tot_cycles: 0,
             iop: RefCell::new(ReadIOP::new(seal, suite.rng.as_ref())),
-            // TODO: change this to core::iter::repeat_n once it's stablabized.
+            // TODO: change this to core::iter::repeat_n once it's stabilized.
             merkle_verifiers: core::iter::repeat_with(|| None)
                 .take(taps.num_groups())
                 .collect(),
@@ -328,7 +344,7 @@ impl<'a, F: Field> Verifier<'a, F> {
 
         // Now, convert U polynomials from coefficient form to evaluation form
         let mut cur_pos = 0;
-        let mut eval_u = Vec::with_capacity(num_taps);
+        let mut eval_u = Vec::with_capacity(num_taps + 1);
         for reg in self.taps.regs() {
             for i in 0..reg.size() {
                 let x = z * back_one.pow(reg.back(i));
@@ -337,7 +353,14 @@ impl<'a, F: Field> Verifier<'a, F> {
             }
             cur_pos += reg.size();
         }
-        assert_eq!(eval_u.len(), num_taps, "Miscalculated capacity for eval_us");
+        // Add 'x' as a final element of eval_u (only used in v3)
+        let three = F::Elem::from_u64(3);
+        eval_u.push(z * three);
+        assert_eq!(
+            eval_u.len(),
+            num_taps + 1,
+            "Miscalculated capacity for eval_us"
+        );
 
         // Compute the core constraint polynomial.
         // I.e. the set of all constraints mixed by poly_mix
@@ -371,7 +394,6 @@ impl<'a, F: Field> Verifier<'a, F> {
                 * z.pow(i)
                 * F::ExtElem::from_subelems([fp0, fp0, fp0, fp1]);
         }
-        let three = F::Elem::from_u64(3);
         check *= (F::ExtElem::from_subfield(&three) * z).pow(self.tot_cycles) - F::ExtElem::ONE;
         trace_if_enabled!("Check = {check:?}");
         if check != result {
@@ -422,10 +444,10 @@ impl<'a, F: Field> Verifier<'a, F> {
             Self::CHECK_SIZE,
             "Miscalculated capacity for check_mix_pows"
         );
-        let gen = <F::Elem as RootsOfUnity>::ROU_FWD[log2_ceil(domain)];
+        let gen_ = <F::Elem as RootsOfUnity>::ROU_FWD[log2_ceil(domain)];
         let hashfn = self.suite.hashfn.as_ref();
         self.fri_verify(|idx| {
-            let x = gen.pow(idx);
+            let x = gen_.pow(idx);
             let rows= self
                 .merkle_verifiers
                 .iter()
@@ -543,4 +565,170 @@ where
     // There should be nothing else in the IOP, so verify that's the case.
     verifier.iop().verify_complete();
     Ok(())
+}
+
+/// Verify a seal is valid for the given circuit. This implements a different IOP
+/// protocol than the other `verify` function above, and is used for circuits in
+/// the architecture of the v3 circuit.
+pub fn verify_v3<F, C>(
+    circuit: &C,
+    suite: &HashSuite<F>,
+    seal: &[u32],
+    po2: usize,
+) -> Result<(), VerificationError>
+where
+    F: Field,
+    C: CircuitCoreDefV3<F>,
+{
+    if seal.is_empty() {
+        return Err(VerificationError::ReceiptFormatError);
+    }
+
+    let mut mix: Vec<F::Elem> = vec![];
+    let mut globals: Vec<F::Elem> = vec![];
+    let mut verifier = Verifier::<F>::new(circuit.get_taps(), suite, seal);
+    verifier.po2 = po2;
+    verifier.tot_cycles = 1 << po2;
+
+    for (i, group) in circuit.get_groups().iter().enumerate() {
+        // Draw Fiat-Shamir randomness for the group.
+        mix.extend(verifier.read_rng(group.mix_count));
+
+        // Commit to the globals for the group.
+        if group.global_count > 0 {
+            let group_globals = verifier.iop().read_field_elem_slice(group.global_count);
+            globals.extend(group_globals);
+            verifier
+                .iop()
+                .commit(&suite.hashfn.hash_elem_slice(group_globals));
+        }
+
+        // Verify merkle root for the group.
+        verifier.verify_group(i)?;
+    }
+
+    // Verify the evaluation of the validity polynomial to make sure
+    // the constraints were not violated.
+    verifier.verify_validity(|poly_mix, eval_u| {
+        circuit.poly_ext(poly_mix, eval_u, &[&globals, &mix]).tot
+    })?;
+
+    // There should be nothing else in the IOP, so verify that's the case.
+    verifier.iop().verify_complete();
+    Ok(())
+}
+
+#[cfg(test)]
+mod test {
+    use risc0_core::field::{
+        Elem,
+        baby_bear::{BabyBear, BabyBearElem, BabyBearExtElem},
+    };
+
+    use crate::{
+        adapter::{CircuitCoreDefV3, CircuitInfoV3, GroupInfo, MixState, PolyExt, TapsProvider},
+        core::hash::poseidon2::Poseidon2HashSuite,
+        taps::{TapData, TapSet},
+        verify::verify_v3,
+    };
+
+    pub const TAPSET: &TapSet = &TapSet::<'static> {
+        taps: &[
+            TapData {
+                offset: 0,
+                back: 0,
+                group: 0,
+                combo: 0,
+                skip: 1,
+            },
+            TapData {
+                offset: 0,
+                back: 0,
+                group: 1,
+                combo: 0,
+                skip: 1,
+            },
+            TapData {
+                offset: 0,
+                back: 0,
+                group: 2,
+                combo: 0,
+                skip: 1,
+            },
+        ],
+        combo_taps: &[0],
+        combo_begin: &[0, 1],
+        group_begin: &[0, 1, 2, 3],
+        combos_count: 1,
+        reg_count: 3,
+        tot_combo_backs: 1,
+        group_names: &["accum", "code", "data"],
+    };
+
+    struct HelloCircuit {}
+    impl CircuitInfoV3 for HelloCircuit {
+        fn get_groups(&self) -> &'static [GroupInfo] {
+            &[
+                GroupInfo {
+                    global_count: 0,
+                    mix_count: 0,
+                },
+                GroupInfo {
+                    global_count: 0,
+                    mix_count: 0,
+                },
+                GroupInfo {
+                    global_count: 0,
+                    mix_count: 0,
+                },
+            ]
+        }
+    }
+    impl PolyExt<BabyBear> for HelloCircuit {
+        fn poly_ext(
+            &self,
+            mix: &BabyBearExtElem,
+            u: &[BabyBearExtElem],
+            _args: &[&[BabyBearElem]],
+        ) -> MixState<BabyBearExtElem> {
+            let mut state = MixState::<BabyBearExtElem> {
+                tot: BabyBearExtElem::ZERO,
+                mul: BabyBearExtElem::ONE,
+            };
+            let mut eqz = |inner: BabyBearExtElem| {
+                state = MixState {
+                    tot: state.tot + state.mul * inner,
+                    mul: state.mul * *mix,
+                };
+            };
+
+            eqz(u[0]);
+            eqz(u[1]);
+            eqz(u[2] * (u[2] - BabyBearExtElem::from_u32(1)));
+            state
+        }
+    }
+    impl TapsProvider for HelloCircuit {
+        fn get_taps(&self) -> &'static TapSet<'static> {
+            TAPSET
+        }
+    }
+    impl CircuitCoreDefV3<BabyBear> for HelloCircuit {}
+
+    #[test]
+    fn verify_v3_stark_proof() {
+        let transcript: Vec<u32> = include_bytes!("proof.bin")
+            .chunks_exact(4)
+            .map(|chunk| u32::from_le_bytes(chunk.try_into().unwrap()))
+            // .map(|x| BabyBearElem::new(x).as_u32_montgomery())
+            .collect();
+
+        let circuit = HelloCircuit {};
+        let suite = Poseidon2HashSuite::new_suite();
+        let x = verify_v3(&circuit, &suite, &transcript, 12);
+        match x {
+            Ok(_) => {}
+            Err(e) => panic!("Failed to verify: {e}"),
+        }
+    }
 }

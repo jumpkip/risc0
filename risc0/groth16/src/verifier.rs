@@ -1,33 +1,34 @@
 // Copyright 2025 RISC Zero, Inc.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
+// Licensed under the Apache License, Version 2.0, <LICENSE-APACHE or
+// http://apache.org/licenses/LICENSE-2.0> or the MIT license <LICENSE-MIT or
+// http://opensource.org/licenses/MIT>, at your option. This file may not be
+// copied, modified, or distributed except according to those terms.
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+//
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 
 extern crate alloc;
 
 use alloc::{vec, vec::Vec};
 
-use anyhow::{anyhow, Error, Result};
+use anyhow::{Error, Result, anyhow};
 use ark_bn254::{Bn254, G1Projective};
 use ark_ec::AffineRepr;
 use ark_groth16::{Groth16, PreparedVerifyingKey, Proof};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
-use risc0_binfmt::{tagged_iter, tagged_struct, Digestible};
+use risc0_binfmt::{Digestible, tagged_iter, tagged_struct};
 use risc0_zkp::core::{digest::Digest, hash::sha::Sha256};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    from_u256, from_u256_hex, g1_from_bytes, g2_from_bytes, ProofJson, PublicInputsJson, Seal,
-    VerifyingKeyJson,
+    ProofJson, PublicInputsJson, Seal, VerifyingKeyJson, from_u256, from_u256_hex, g1_from_bytes,
+    g2_from_bytes,
 };
 
 // Constants from: risc0-ethereum/contracts/src/groth16/Groth16Verifier.sol
@@ -176,7 +177,7 @@ impl Verifier {
     }
 }
 
-/// Verifying key for Groth16 proofs.
+/// Scalar field element over BN254 used for public inputs and hashing.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Fr(#[serde(with = "serde_ark")] pub(crate) ark_bn254::Fr);
 
@@ -237,7 +238,7 @@ mod serde_ark {
 
     use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
     use serde::{
-        de::Error as _, ser::Error as _, Deserialize, Deserializer, Serialize, Serializer,
+        Deserialize, Deserializer, Serialize, Serializer, de::Error as _, ser::Error as _,
     };
 
     pub fn serialize<S>(key: &impl CanonicalSerialize, serializer: S) -> Result<S::Ok, S::Error>

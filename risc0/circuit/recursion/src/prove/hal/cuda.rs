@@ -1,45 +1,47 @@
 // Copyright 2025 RISC Zero, Inc.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
+// Licensed under the Apache License, Version 2.0, <LICENSE-APACHE or
+// http://apache.org/licenses/LICENSE-2.0> or the MIT license <LICENSE-MIT or
+// http://opensource.org/licenses/MIT>, at your option. This file may not be
+// copied, modified, or distributed except according to those terms.
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+//
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 
 use std::rc::Rc;
 
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use risc0_circuit_recursion_sys::{
+    RawAccumBuffers, RawExecBuffers, RawPreflightTrace, StepMode,
     risc0_circuit_recursion_cuda_accum, risc0_circuit_recursion_cuda_eval_check,
-    risc0_circuit_recursion_cuda_witgen, RawAccumBuffers, RawExecBuffers, RawPreflightTrace,
-    StepMode,
+    risc0_circuit_recursion_cuda_witgen,
 };
 use risc0_sys::ffi_wrap;
 use risc0_zkp::{
+    INV_RATE,
     core::log2_ceil,
     field::{
+        RootsOfUnity,
         baby_bear::{BabyBearElem, BabyBearExtElem},
-        map_pow, RootsOfUnity,
+        map_pow,
     },
     hal::{
+        AccumPreflight, Buffer, CircuitHal,
         cuda::{
             BufferImpl as CudaBuffer, CudaHal, CudaHalPoseidon2, CudaHalPoseidon254, CudaHalSha256,
             CudaHash, CudaHashPoseidon2, CudaHashPoseidon254, CudaHashSha256,
         },
-        AccumPreflight, Buffer, CircuitHal,
     },
-    INV_RATE,
 };
 
 use crate::{
-    prove::{RecursionProver, RecursionProverImpl},
     GLOBAL_MIX, GLOBAL_OUT, REGISTER_GROUP_ACCUM, REGISTER_GROUP_CTRL, REGISTER_GROUP_DATA,
+    prove::{RecursionProver, RecursionProverImpl},
 };
 
 use super::{CircuitAccumulator, CircuitWitnessGenerator};

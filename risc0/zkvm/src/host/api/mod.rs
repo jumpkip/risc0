@@ -1,16 +1,17 @@
 // Copyright 2025 RISC Zero, Inc.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
+// Licensed under the Apache License, Version 2.0, <LICENSE-APACHE or
+// http://apache.org/licenses/LICENSE-2.0> or the MIT license <LICENSE-MIT or
+// http://opensource.org/licenses/MIT>, at your option. This file may not be
+// copied, modified, or distributed except according to those terms.
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+//
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 
 pub(crate) mod client;
 pub(crate) mod convert;
@@ -27,21 +28,22 @@ use std::{
     path::{Path, PathBuf},
     process::{Child, Command},
     sync::{
+        Arc, Mutex,
         atomic::{AtomicBool, Ordering},
         mpsc::channel,
-        Arc, Mutex,
     },
     thread,
     time::Duration,
 };
 
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::{Context, Result, anyhow, bail};
 use bytes::{Buf, BufMut, Bytes};
 use lazy_regex::regex_captures;
 use prost::Message;
 use semver::Version;
+use serde::{Deserialize, Serialize};
 
-use crate::{get_version, ExitCode, Journal, ReceiptClaim};
+use crate::{ExitCode, Journal, ReceiptClaim, get_version};
 
 mod pb {
     pub(crate) mod api {
@@ -81,7 +83,6 @@ impl RootMessage for pb::api::GenericReply {}
 impl RootMessage for pb::api::OnIoReply {}
 impl RootMessage for pb::api::ProveKeccakReply {}
 impl RootMessage for pb::api::ProveSegmentReply {}
-impl RootMessage for pb::api::ProveZkrReply {}
 impl RootMessage for pb::api::LiftRequest {}
 impl RootMessage for pb::api::LiftReply {}
 impl RootMessage for pb::api::JoinRequest {}
@@ -178,11 +179,13 @@ impl ParentProcessConnector {
                     client_version.major, client_version.minor
                 )
             } else {
-                format!("1. Your risc0 dependencies are using a pre-released version {client_version}.\n   \
+                format!(
+                    "1. Your risc0 dependencies are using a pre-released version {client_version}.\n   \
                     If you encounter this error message when running code on the risc0 codebase, you must\n   \
                     either run the command `git checkout origin/release-{}.{}` to checkout the version of the\n   \
                     risc0 code that is compatible with your server or build the r0vm server from source\n   \
-                    https://github.com/risc0/risc0/blob/main/CONTRIBUTING.md\n", server_version.major, server_version.minor
+                    https://github.com/risc0/risc0/blob/main/CONTRIBUTING.md\n",
+                    server_version.major, server_version.minor
                 )
             };
             let msg = format!(
@@ -191,7 +194,8 @@ impl ParentProcessConnector {
                 {server_suggestion}\
                 2. Change the risc0-zkvm and risc0-build dependencies in your project to {}.{}\n\n\
                 risc0-zkvm version: {client_version}\n\
-                r0vm server version: {server_version}", server_version.major, server_version.minor
+                r0vm server version: {server_version}",
+                server_version.major, server_version.minor
             );
             tracing::warn!("{msg}");
             bail!(msg);
@@ -410,7 +414,7 @@ impl SessionInfo {
 }
 
 /// Provides information about a segment of execution.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[non_exhaustive]
 pub struct SegmentInfo {
     /// The number of cycles used for proving in powers of 2.

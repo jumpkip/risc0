@@ -1,16 +1,17 @@
 // Copyright 2025 RISC Zero, Inc.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
+// Licensed under the Apache License, Version 2.0, <LICENSE-APACHE or
+// http://apache.org/licenses/LICENSE-2.0> or the MIT license <LICENSE-MIT or
+// http://opensource.org/licenses/MIT>, at your option. This file may not be
+// copied, modified, or distributed except according to those terms.
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+//
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 
 mod secp256k1;
 mod secp384r1;
@@ -334,11 +335,11 @@ fn add_raw<const WIDTH: usize>(
 /// Checks if the bit at the position is set.
 fn bit<const WIDTH: usize>(scalar: &[u32; WIDTH], bit: u32) -> bool {
     let bits_per_digit = 32u32;
-    if let Ok(digit_index) = usize::try_from(bit / bits_per_digit) {
-        if let Some(digit) = scalar.get(digit_index) {
-            let bit_mask = (1u32) << (bit % bits_per_digit);
-            return (digit & bit_mask) != 0;
-        }
+    if let Ok(digit_index) = usize::try_from(bit / bits_per_digit)
+        && let Some(digit) = scalar.get(digit_index)
+    {
+        let bit_mask = (1u32) << (bit % bits_per_digit);
+        return (digit & bit_mask) != 0;
     }
     false
 }

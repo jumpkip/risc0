@@ -1,26 +1,26 @@
 // Copyright 2025 RISC Zero, Inc.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
+// Licensed under the Apache License, Version 2.0, <LICENSE-APACHE or
+// http://apache.org/licenses/LICENSE-2.0> or the MIT license <LICENSE-MIT or
+// http://opensource.org/licenses/MIT>, at your option. This file may not be
+// copied, modified, or distributed except according to those terms.
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+//
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 
 use crate::components::Component;
 use crate::distribution::{
-    download_bytes, download_json,
+    DistributionPlatform, ProgressWriter, download_bytes, download_json,
     sha2::{Sha256Digest, Sha256Writer},
     signature::{PublicKey, Signature},
-    DistributionPlatform, ProgressWriter,
 };
 #[cfg(feature = "publish")]
-use crate::distribution::{signature::PrivateKey, upload_bytes, ProgressReader};
+use crate::distribution::{ProgressReader, signature::PrivateKey, upload_bytes};
 use crate::env::Environment;
 #[cfg(feature = "publish")]
 use crate::{AwsCredentials, Platform};
@@ -28,7 +28,7 @@ use crate::{BaseUrls, Result, RzupError, RzupEvent, TransferKind};
 
 use semver::Version;
 use serde::{Deserialize, Serialize};
-use serde_with::{serde_as, DisplayFromStr};
+use serde_with::{DisplayFromStr, serde_as};
 
 use std::collections::BTreeMap;
 use std::fmt;
@@ -145,7 +145,7 @@ fn sign_s3_request(
     creds: &AwsCredentials,
     req: &mut http::Request<reqwest::blocking::Body>,
 ) -> Result<()> {
-    use aws_sigv4::http_request::{sign, SignableBody, SignableRequest, SigningSettings};
+    use aws_sigv4::http_request::{SignableBody, SignableRequest, SigningSettings, sign};
     use aws_sigv4::sign::v4;
 
     let identity = creds.clone().into();

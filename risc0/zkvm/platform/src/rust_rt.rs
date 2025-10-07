@@ -1,16 +1,17 @@
-// Copyright 2024 RISC Zero, Inc.
+// Copyright 2025 RISC Zero, Inc.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
+// Licensed under the Apache License, Version 2.0, <LICENSE-APACHE or
+// http://apache.org/licenses/LICENSE-2.0> or the MIT license <LICENSE-MIT or
+// http://opensource.org/licenses/MIT>, at your option. This file may not be
+// copied, modified, or distributed except according to those terms.
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+//
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 
 //! This module contains the components required to link a Rust binary.
 //!
@@ -38,13 +39,13 @@ pub fn panic_fault(panic_info: &PanicInfo) -> ! {
 mod entrypoint {
     use crate::syscall::sys_halt;
 
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     unsafe extern "C" fn __start() -> ! {
         // This definition of __start differs from risc0_zkvm::guest in that it does not initialize the
         // journal and will halt with empty output. It also assumes main follows the standard C
         // convention, and uses the returned i32 value as the user exit code for halt.
         let exit_code = {
-            extern "C" {
+            unsafe extern "C" {
                 fn main(argc: i32, argv: *const *const u8) -> i32;
             }
 

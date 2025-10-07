@@ -1,16 +1,17 @@
 // Copyright 2025 RISC Zero, Inc.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
+// Licensed under the Apache License, Version 2.0, <LICENSE-APACHE or
+// http://apache.org/licenses/LICENSE-2.0> or the MIT license <LICENSE-MIT or
+// http://opensource.org/licenses/MIT>, at your option. This file may not be
+// copied, modified, or distributed except according to those terms.
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+//
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 
 use std::{
     error::Error as StdError,
@@ -18,29 +19,25 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::{Context, Result, anyhow, bail};
 use bytes::Bytes;
 use prost::Message;
 use risc0_binfmt::PovwJobId;
 use risc0_zkp::core::digest::Digest;
 
-use super::{malformed_err, path_to_string, pb, ConnectionWrapper, Connector, TcpConnector};
+use super::{ConnectionWrapper, Connector, TcpConnector, malformed_err, path_to_string, pb};
 use crate::{
-    get_prover_server, get_version,
+    AssetRequest, Assumption, ExecutorEnv, InnerAssumptionReceipt, ProverOpts, Receipt,
+    ReceiptClaim, Segment, SegmentReceipt, SegmentRef, Session, SuccinctReceipt, TraceCallback,
+    TraceEvent, Unknown, VerifierContext, get_prover_server, get_version,
     host::{
         api::convert::keccak_input_to_bytes,
-        client::{
-            env::{CoprocessorCallback, ProveKeccakRequest},
-            slice_io::SliceIo,
-        },
+        client::env::{CoprocessorCallback, ProveKeccakRequest},
         server::{
             exec::executor::ExecutorImpl, prove::keccak::prove_keccak, session::NullSegmentRef,
         },
     },
     recursion::identity_p254,
-    AssetRequest, Assumption, ExecutorEnv, InnerAssumptionReceipt, ProverOpts, Receipt,
-    ReceiptClaim, Segment, SegmentReceipt, SegmentRef, Session, SuccinctReceipt, TraceCallback,
-    TraceEvent, Unknown, VerifierContext,
 };
 
 /// A server implementation for handling requests by clients of the zkVM.
@@ -119,41 +116,6 @@ impl Write for PosixIoProxy {
 
     fn flush(&mut self) -> std::io::Result<()> {
         Ok(())
-    }
-}
-
-#[derive(Clone)]
-struct SliceIoProxy {
-    conn: ConnectionWrapper,
-}
-
-impl SliceIoProxy {
-    fn new(conn: ConnectionWrapper) -> Self {
-        Self { conn }
-    }
-}
-
-impl SliceIo for SliceIoProxy {
-    fn handle_io(&mut self, syscall: &str, from_guest: Bytes) -> Result<Bytes> {
-        let request = pb::api::ServerReply {
-            kind: Some(pb::api::server_reply::Kind::Ok(pb::api::ClientCallback {
-                kind: Some(pb::api::client_callback::Kind::Io(pb::api::OnIoRequest {
-                    kind: Some(pb::api::on_io_request::Kind::Slice(pb::api::SliceIo {
-                        name: syscall.to_string(),
-                        from_guest: from_guest.into(),
-                    })),
-                })),
-            })),
-        };
-        tracing::trace!("tx: {request:?}");
-        let reply: pb::api::OnIoReply = self.conn.send_recv(request).map_io_err()?;
-        tracing::trace!("rx: {reply:?}");
-
-        let kind = reply.kind.ok_or("Malformed message").map_io_err()?;
-        match kind {
-            pb::api::on_io_reply::Kind::Ok(buf) => Ok(buf.into()),
-            pb::api::on_io_reply::Kind::Error(err) => Err(err.into()),
-        }
     }
 }
 
@@ -855,10 +817,6 @@ fn build_env<'a>(
         let proxy = PosixIoProxy::new(*fd, conn.clone());
         env_builder.write_fd(*fd, proxy);
     }
-    let proxy = SliceIoProxy::new(conn.clone());
-    for name in request.slice_ios.iter() {
-        env_builder.slice_io(name, proxy.clone());
-    }
     if let Some(segment_limit_po2) = request.segment_limit_po2 {
         env_builder.segment_limit_po2(segment_limit_po2);
     }
@@ -989,10 +947,10 @@ fn execute_redis(
     use redis::{Client, Commands, ConnectionLike, SetExpiry, SetOptions};
     use std::{
         sync::{
-            mpsc::{sync_channel, Receiver},
             Arc, Mutex,
+            mpsc::{Receiver, sync_channel},
         },
-        thread::{spawn, JoinHandle},
+        thread::{JoinHandle, spawn},
     };
 
     let channel_size = match std::env::var("RISC0_REDIS_CHANNEL_SIZE") {

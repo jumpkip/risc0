@@ -1,16 +1,17 @@
 // Copyright 2025 RISC Zero, Inc.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
+// Licensed under the Apache License, Version 2.0, <LICENSE-APACHE or
+// http://apache.org/licenses/LICENSE-2.0> or the MIT license <LICENSE-MIT or
+// http://opensource.org/licenses/MIT>, at your option. This file may not be
+// copied, modified, or distributed except according to those terms.
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+//
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -19,7 +20,7 @@ use addr2line::{
     demangle_auto,
     gimli::{self, Reader as _},
 };
-use anyhow::{anyhow, bail, Result};
+use anyhow::{Result, anyhow, bail};
 
 use super::Frame;
 
@@ -127,17 +128,16 @@ impl<'dwarf> InlineFunctionTableBuilder<'dwarf> {
     ) -> Result<()> {
         let mut entries = unit.entries();
         while let Some((_, entry)) = entries.next_dfs()? {
-            if entry.tag() == gimli::DW_TAG_compile_unit {
-                if let Ok(gimli::AttributeValue::Language(unit_language)) =
+            if entry.tag() == gimli::DW_TAG_compile_unit
+                && let Ok(gimli::AttributeValue::Language(unit_language)) =
                     dwarf_attr_or_error(entry, gimli::DW_AT_language)
-                {
-                    self.language = Some(unit_language);
-                }
+            {
+                self.language = Some(unit_language);
             }
-            if entry.tag() == gimli::DW_TAG_inlined_subroutine {
-                if let Err(error) = self.build_from_inline_subroutine(unit, entry) {
-                    tracing::warn!("Error decoding DWARF for DW_TAG_inlined_subroutine: {error}");
-                }
+            if entry.tag() == gimli::DW_TAG_inlined_subroutine
+                && let Err(error) = self.build_from_inline_subroutine(unit, entry)
+            {
+                tracing::warn!("Error decoding DWARF for DW_TAG_inlined_subroutine: {error}");
             }
         }
 

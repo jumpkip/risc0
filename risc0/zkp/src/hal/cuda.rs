@@ -1,20 +1,21 @@
 // Copyright 2025 RISC Zero, Inc.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
+// Licensed under the Apache License, Version 2.0, <LICENSE-APACHE or
+// http://apache.org/licenses/LICENSE-2.0> or the MIT license <LICENSE-MIT or
+// http://opensource.org/licenses/MIT>, at your option. This file may not be
+// copied, modified, or distributed except according to those terms.
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+//
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 
 use std::{cell::RefCell, fmt::Debug, marker::PhantomData, rc::Rc, sync::OnceLock};
 
-use anyhow::{bail, Context as _, Result};
+use anyhow::{Context as _, Result, bail};
 use cust::{
     device::DeviceAttribute,
     memory::{DeviceCopy, DevicePointer, GpuBuffer},
@@ -23,24 +24,24 @@ use cust::{
 use parking_lot::{ReentrantMutex, ReentrantMutexGuard};
 use risc0_core::{
     field::{
-        baby_bear::{BabyBear, BabyBearElem, BabyBearExtElem},
         Elem, ExtElem, RootsOfUnity,
+        baby_bear::{BabyBear, BabyBearElem, BabyBearExtElem},
     },
     scope,
 };
 use risc0_sys::{cuda::*, ffi_wrap};
 
-use super::{tracker, Buffer, Hal};
+use super::{Buffer, Hal, tracker};
 use crate::{
+    FRI_FOLD,
     core::{
         digest::Digest,
         hash::{
-            poseidon2::Poseidon2HashSuite, poseidon_254::Poseidon254HashSuite,
-            sha::Sha256HashSuite, HashSuite,
+            HashSuite, poseidon_254::Poseidon254HashSuite, poseidon2::Poseidon2HashSuite,
+            sha::Sha256HashSuite,
         },
         log2_ceil,
     },
-    FRI_FOLD,
 };
 
 // The GPU becomes unstable as the number of concurrent provers grow.
@@ -90,7 +91,7 @@ impl CudaHash for CudaHashSha256 {
         let input = io.as_device_ptr_with_offset(2 * output_size);
         let output = io.as_device_ptr_with_offset(output_size);
 
-        extern "C" {
+        unsafe extern "C" {
             fn risc0_zkp_cuda_sha_fold(
                 output: DevicePointer<u8>,
                 input: DevicePointer<u8>,
@@ -106,7 +107,7 @@ impl CudaHash for CudaHashSha256 {
         let col_size = matrix.size() / output.size();
         assert_eq!(matrix.size(), col_size * row_size);
 
-        extern "C" {
+        unsafe extern "C" {
             fn risc0_zkp_cuda_sha_rows(
                 output: DevicePointer<u8>,
                 matrix: DevicePointer<u8>,
@@ -598,7 +599,7 @@ impl<CH: CudaHash + ?Sized> Hal for CudaHal<CH> {
         assert_eq!(row_size, 1 << bits);
         let io_size = io.size();
 
-        extern "C" {
+        unsafe extern "C" {
             fn risc0_zkp_cuda_batch_bit_reverse(
                 io: DevicePointer<u8>,
                 bits: u32,
@@ -633,7 +634,7 @@ impl<CH: CudaHash + ?Sized> Hal for CudaHal<CH> {
         let shared_size = threads_per_block * BYTES_PER_WORD * WORDS_PER_FPEXT;
         let kernel_count = out.size() * threads_per_block as usize;
 
-        extern "C" {
+        unsafe extern "C" {
             fn risc0_zkp_cuda_batch_evaluate_any(
                 output: DevicePointer<u8>,
                 coeffs: DevicePointer<u8>,
@@ -667,7 +668,7 @@ impl<CH: CudaHash + ?Sized> Hal for CudaHal<CH> {
         size: usize,
         stride: usize,
     ) {
-        extern "C" {
+        unsafe extern "C" {
             fn risc0_zkp_cuda_gather_sample(
                 dst: DevicePointer<u8>,
                 src: DevicePointer<u8>,
@@ -722,7 +723,7 @@ impl<CH: CudaHash + ?Sized> Hal for CudaHal<CH> {
         let mix_start = self.copy_from_extelem("mix_start", &[*mix_start]);
         let mix = self.copy_from_extelem("mix", &[*mix]);
 
-        extern "C" {
+        unsafe extern "C" {
             fn risc0_zkp_cuda_mix_poly_coeffs(
                 output: DevicePointer<u8>,
                 input: DevicePointer<u8>,
@@ -758,7 +759,7 @@ impl<CH: CudaHash + ?Sized> Hal for CudaHal<CH> {
         assert_eq!(output.size(), input2.size());
         let count = output.size();
 
-        extern "C" {
+        unsafe extern "C" {
             fn risc0_zkp_cuda_eltwise_add_fp(
                 out: DevicePointer<u8>,
                 x: DevicePointer<u8>,
@@ -788,7 +789,7 @@ impl<CH: CudaHash + ?Sized> Hal for CudaHal<CH> {
         assert_eq!(output.size(), count * Self::ExtElem::EXT_SIZE);
         assert_eq!(input.size(), count * to_add);
 
-        extern "C" {
+        unsafe extern "C" {
             fn risc0_zkp_cuda_eltwise_sum_fpext(
                 output: DevicePointer<u8>,
                 input: DevicePointer<u8>,
@@ -816,7 +817,7 @@ impl<CH: CudaHash + ?Sized> Hal for CudaHal<CH> {
         let count = output.size();
         assert_eq!(count, input.size());
 
-        extern "C" {
+        unsafe extern "C" {
             fn risc0_zkp_cuda_eltwise_copy_fp(
                 output: DevicePointer<u8>,
                 input: DevicePointer<u8>,
@@ -835,7 +836,7 @@ impl<CH: CudaHash + ?Sized> Hal for CudaHal<CH> {
     }
 
     fn eltwise_zeroize_elem(&self, elems: &Self::Buffer<Self::Elem>) {
-        extern "C" {
+        unsafe extern "C" {
             fn risc0_zkp_cuda_eltwise_zeroize_fp(
                 elems: DevicePointer<u8>,
                 count: u32,
@@ -868,7 +869,7 @@ impl<CH: CudaHash + ?Sized> Hal for CudaHal<CH> {
         let offsets = self.copy_from_u32("offsets", offsets);
         let values = self.copy_from_elem("values", values);
 
-        extern "C" {
+        unsafe extern "C" {
             fn risc0_zkp_cuda_scatter(
                 into: DevicePointer<u8>,
                 index: DevicePointer<u8>,
@@ -903,7 +904,7 @@ impl<CH: CudaHash + ?Sized> Hal for CudaHal<CH> {
     ) {
         let from = self.copy_from_elem("from", from);
 
-        extern "C" {
+        unsafe extern "C" {
             fn risc0_zkp_cuda_eltwise_copy_fp_region(
                 into: DevicePointer<u8>,
                 from: DevicePointer<u8>,
@@ -942,7 +943,7 @@ impl<CH: CudaHash + ?Sized> Hal for CudaHal<CH> {
         assert_eq!(input.size(), output.size() * FRI_FOLD);
         let mix = self.copy_from_extelem("mix", &[*mix]);
 
-        extern "C" {
+        unsafe extern "C" {
             fn risc0_zkp_cuda_fri_fold(
                 output: DevicePointer<u8>,
                 input: DevicePointer<u8>,
@@ -1001,7 +1002,7 @@ impl<CH: CudaHash + ?Sized> Hal for CudaHal<CH> {
         let reg_combo_ids = self.copy_from_u32("reg_combo_ids", reg_combo_ids);
         let mix = self.copy_from_extelem("mix", &[*mix]);
 
-        extern "C" {
+        unsafe extern "C" {
             fn risc0_zkp_cuda_combos_prepare(
                 combos: DevicePointer<u8>,
                 coeff_u: DevicePointer<u8>,

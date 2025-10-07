@@ -1,27 +1,28 @@
 // Copyright 2025 RISC Zero, Inc.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
+// Licensed under the Apache License, Version 2.0, <LICENSE-APACHE or
+// http://apache.org/licenses/LICENSE-2.0> or the MIT license <LICENSE-MIT or
+// http://opensource.org/licenses/MIT>, at your option. This file may not be
+// copied, modified, or distributed except according to those terms.
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+//
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 
 use std::io::Write as _;
 use std::net::{SocketAddr, TcpListener};
 use std::path::Path;
 
 use super::executor::ExecutorImpl;
-use anyhow::anyhow;
 use anyhow::Result;
+use anyhow::anyhow;
 use gdbstub::{conn::ConnectionExt, stub::GdbStub};
 use risc0_circuit_rv32im::execute::{
-    gdb::Debugger as CircuitDebugger, Executor as CircuitExecutor,
+    Executor as CircuitExecutor, gdb::Debugger as CircuitDebugger,
 };
 use tempfile::NamedTempFile;
 
@@ -95,7 +96,7 @@ impl<'a, 'b, 'c> GdbExecutor<'a, 'b, 'c> {
 mod tests {
     use super::*;
     use crate::ExecutorEnv;
-    use risc0_zkvm_methods::{multi_test::MultiTestSpec, MULTI_TEST_ELF};
+    use risc0_zkvm_methods::{MULTI_TEST_ELF, multi_test::MultiTestSpec};
 
     #[test]
     fn end_to_end() {

@@ -1,16 +1,17 @@
 // Copyright 2025 RISC Zero, Inc.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
+// Licensed under the Apache License, Version 2.0, <LICENSE-APACHE or
+// http://apache.org/licenses/LICENSE-2.0> or the MIT license <LICENSE-MIT or
+// http://opensource.org/licenses/MIT>, at your option. This file may not be
+// copied, modified, or distributed except according to those terms.
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+//
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 
 use std::{
     fs,
@@ -39,7 +40,7 @@ const NUM_BITS: usize = 31;
 // Smallest allowed alpha for Baby Bear
 const ALPHA: usize = 7;
 
-// A structure to hold all computed constant to eventually be exported
+// A structure to hold all computed constants to eventually be exported
 struct ComputedConstants {
     rounds_full: usize,             // The number of full rounds, always 8 in practice
     rounds_partial: usize,          // The number of partial rounds, computed based on security
@@ -62,7 +63,7 @@ impl ComputedConstants {
     }
 }
 
-// A function to turns a string of hex constants into a vector of Elems
+// A function to turn a string of hex constants into a vector of Elems
 fn to_elems(input_string: &str) -> Vec<Elem> {
     let mut out = Vec::<Elem>::new();
     for part in input_string.split(',') {
@@ -70,7 +71,7 @@ fn to_elems(input_string: &str) -> Vec<Elem> {
             .chars()
             .filter(|c| "0123456789abcdef".contains(*c))
             .collect();
-        let num = u32::from_str_radix(&tidy_part, 16).unwrap();
+        let num = u32::from_str_radix(&tidy_part, 16).expect("failed to parse hex number into u32");
         assert!(num < (FIELD as u32));
         out.push(Elem::new(num));
     }
@@ -95,7 +96,7 @@ fn extract_from_sage(consts: &mut ComputedConstants, stdout: &str) {
     assert!(consts.mds.len() == CELLS * CELLS);
 }
 
-// Run the upstream 'official' sage code and gets the output
+// Run the upstream 'official' sage code and get the output
 fn run_sage() -> String {
     // Make a temporary directory
     let temp_dir = tempdir().unwrap();
@@ -146,7 +147,7 @@ fn run_sage() -> String {
         .arg(format!("{FIELD:x}")) // P in hex i.e. 15*2^27 + 1
         .stdout(Stdio::piped()) // Pipe output
         .spawn()
-        .unwrap();
+        .expect("Failed to spawn Sage process. Is Sage installed?");
 
     // Convert the output to a bunch of lines
     let sage_output = sage_child.wait_with_output().unwrap();

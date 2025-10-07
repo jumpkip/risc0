@@ -1,22 +1,27 @@
 // Copyright 2025 RISC Zero, Inc.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
+// Licensed under the Apache License, Version 2.0, <LICENSE-APACHE or
+// http://apache.org/licenses/LICENSE-2.0> or the MIT license <LICENSE-MIT or
+// http://opensource.org/licenses/MIT>, at your option. This file may not be
+// copied, modified, or distributed except according to those terms.
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+//
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 
 use std::{sync::Arc, time::Duration};
 
+use derive_more::From;
 use serde::{Deserialize, Serialize};
 
-use crate::{AssumptionReceipt, Journal, Receipt, SessionStats};
+use crate::{
+    AssumptionReceipt, ExitCode, Journal, Receipt, ReceiptClaim, SegmentInfo, SessionInfo,
+    SessionStats,
+};
 
 /// TODO
 #[derive(Serialize, Deserialize)]
@@ -32,13 +37,42 @@ pub struct ProofRequest {
 
     /// TODO
     pub segment_limit_po2: Option<u32>,
+
+    /// TODO
+    pub execute_only: bool,
+}
+
+/// TODO
+#[derive(Copy, Clone, Debug, Serialize, Deserialize)]
+pub enum ShrinkWrapKind {
+    /// TODO
+    Groth16,
+}
+
+/// TODO
+#[derive(Serialize, Deserialize)]
+pub struct ShrinkWrapRequest {
+    /// TODO
+    pub kind: ShrinkWrapKind,
+    /// TODO
+    pub receipt: Receipt,
+}
+
+/// TODO
+#[allow(clippy::large_enum_variant)]
+#[derive(Serialize, Deserialize, From)]
+pub enum JobRequest {
+    /// TODO
+    Proof(ProofRequest),
+    /// TODO
+    ShrinkWrap(ShrinkWrapRequest),
 }
 
 /// TODO
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct JobInfo {
+pub struct JobInfo<JobResultT> {
     /// TODO
-    pub status: JobStatus,
+    pub status: JobStatus<JobResultT>,
 
     /// TODO
     pub elapsed_time: Duration,
@@ -46,12 +80,12 @@ pub struct JobInfo {
 
 /// TODO
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub enum JobStatus {
+pub enum JobStatus<JobResultT> {
     /// TODO
     Running(String),
 
     /// TODO
-    Succeeded(ProofResult),
+    Succeeded(JobResultT),
 
     /// TODO
     Failed(TaskError),
@@ -70,6 +104,13 @@ pub struct ProofResult {
     pub session: Arc<Session>,
 
     /// TODO
+    pub receipt: Option<Arc<Receipt>>,
+}
+
+/// TODO
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ShrinkWrapResult {
+    /// TODO
     pub receipt: Arc<Receipt>,
 }
 
@@ -84,6 +125,26 @@ pub struct Session {
 
     /// TODO
     pub assumptions: Vec<Arc<AssumptionReceipt>>,
+
+    /// TODO
+    pub segments: Vec<SegmentInfo>,
+
+    /// TODO
+    pub exit_code: ExitCode,
+
+    /// TODO
+    pub receipt_claim: ReceiptClaim,
+}
+
+impl From<Session> for SessionInfo {
+    fn from(s: Session) -> Self {
+        Self {
+            segments: s.segments,
+            journal: s.journal.unwrap_or_default(),
+            exit_code: s.exit_code,
+            receipt_claim: Some(s.receipt_claim),
+        }
+    }
 }
 
 /// TODO
@@ -93,7 +154,7 @@ pub enum TaskError {
     Generic(String),
 }
 
-impl JobStatus {
+impl<JobResultT> JobStatus<JobResultT> {
     /// TODO
     pub fn bonsai_status(&self) -> &str {
         match self {

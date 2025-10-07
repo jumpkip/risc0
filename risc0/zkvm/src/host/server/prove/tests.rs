@@ -1,16 +1,17 @@
 // Copyright 2025 RISC Zero, Inc.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
+// Licensed under the Apache License, Version 2.0, <LICENSE-APACHE or
+// http://apache.org/licenses/LICENSE-2.0> or the MIT license <LICENSE-MIT or
+// http://opensource.org/licenses/MIT>, at your option. This file may not be
+// copied, modified, or distributed except according to those terms.
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+//
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 
 use std::sync::OnceLock;
 
@@ -18,17 +19,17 @@ use anyhow::Result;
 use risc0_binfmt::{MemoryImage, PovwJobId, PovwLogId, PovwNonce};
 use risc0_circuit_rv32im::TerminateState;
 use risc0_zkp::{core::digest::Digest, verify::VerificationError};
-use risc0_zkvm_methods::{multi_test::MultiTestSpec, MULTI_TEST_ELF, MULTI_TEST_ID};
-use risc0_zkvm_platform::{memory, WORD_SIZE};
+use risc0_zkvm_methods::{MULTI_TEST_ELF, MULTI_TEST_ID, multi_test::MultiTestSpec};
+use risc0_zkvm_platform::{WORD_SIZE, memory};
 use rstest::rstest;
 
 use super::get_prover_server;
 use crate::{
+    ExecutorEnv, ExitCode, InnerReceipt, ProveInfo, ProverOpts, Receipt, ReceiptKind, Session,
+    SimpleSegmentRef, SuccinctReceiptVerifierParameters, VerifierContext,
     host::server::{exec::executor::ExecutorImpl, testutils},
     serde::{from_slice, to_vec},
     sha::Digestible,
-    ExecutorEnv, ExitCode, InnerReceipt, ProveInfo, ProverOpts, Receipt, ReceiptKind, Session,
-    SimpleSegmentRef, SuccinctReceiptVerifierParameters, VerifierContext,
 };
 
 #[allow(dead_code)]
@@ -96,6 +97,7 @@ fn prove_elf_succinct(env: ExecutorEnv, elf: &[u8]) -> Result<Receipt> {
 }
 
 #[test_log::test]
+#[cfg_attr(all(ci, not(ci_profile = "slow")), ignore = "slow test")]
 fn keccak_union() {
     let env = ExecutorEnv::builder()
         .write(&MultiTestSpec::KeccakUnion(3))
@@ -192,6 +194,17 @@ fn check_image_id() {
 }
 
 #[test_log::test]
+fn p2_basic() {
+    let env = ExecutorEnv::builder()
+        .write(&MultiTestSpec::Poseidon2Basic)
+        .unwrap()
+        .build()
+        .unwrap();
+    let receipt = prove_elf(env, MULTI_TEST_ELF).unwrap();
+    receipt.verify(MULTI_TEST_ID).unwrap();
+}
+
+#[test_log::test]
 fn sha_basics() {
     let run_sha = |msg: &str| -> String {
         let env = ExecutorEnv::builder()
@@ -222,6 +235,7 @@ fn sha_basics() {
 }
 
 #[test_log::test]
+#[cfg_attr(all(ci, not(ci_profile = "slow")), ignore = "slow test")]
 fn sha_iter() {
     let input = MultiTestSpec::ShaDigestIter {
         data: Vec::from([0u8; 32]),
@@ -241,6 +255,7 @@ fn sha_iter() {
 }
 
 #[test_log::test]
+#[cfg_attr(all(ci, not(ci_profile = "slow")), ignore = "slow test")]
 fn bigint_accel() {
     let cases = testutils::generate_bigint_test_cases(10);
     for case in cases {
@@ -352,6 +367,8 @@ fn session_events() {
 // https://github.com/riscv-software-src/riscv-tests
 // They were built using the toolchain from:
 // https://github.com/risc0/toolchain/releases/tag/2022.03.25
+// The exception is the test of fence, which was built with
+// https://archlinux.org/packages/extra/x86_64/riscv64-elf-gcc/ v14.0.1-1
 mod riscv {
     use super::*;
     use crate::ExecutorEnv;
@@ -387,7 +404,9 @@ mod riscv {
 
             let env = ExecutorEnv::default();
             prove_elf(env, &elf).unwrap();
+            return;
         }
+        panic!("No filename matching '{}'", test_name);
     }
 
     macro_rules! test_case {
@@ -412,8 +431,10 @@ mod riscv {
     test_case!(bne);
     test_case!(div);
     test_case!(divu);
+    test_case!(fence);
     test_case!(jal);
     test_case!(jalr);
+    test_case!(misaligned_jalr);
     test_case!(lb);
     test_case!(lbu);
     test_case!(lh);
@@ -669,8 +690,8 @@ mod sys_verify {
 
     use super::*;
     use crate::{
-        recursion::{prove::zkr, test_zkr, MerkleGroup},
-        Assumption, SuccinctReceipt, Unknown, RECURSION_PO2,
+        Assumption, RECURSION_PO2, SuccinctReceipt, Unknown,
+        recursion::{MerkleGroup, prove::zkr, test_zkr},
     };
 
     fn prove_halt(exit_code: u8) -> Receipt {
@@ -924,7 +945,7 @@ mod sys_verify {
         work_receipt.verify_integrity()?;
 
         // NOTE: The work claim will only contain value for the conditional receipt.
-        // PoVW value for the assumption receipts is considered seperately, instead of in the take
+        // PoVW value for the assumption receipts is considered separately, instead of in the take
         // WorkClaim (i.e. the same compact range representation).
         let work_claim = work_receipt.claim().as_value()?.clone();
         assert_eq!(
@@ -982,7 +1003,7 @@ fn run_unconstrained() -> Result<()> {
 
 #[test_log::test]
 fn povw_nonce_assignment() -> Result<()> {
-    let spec = MultiTestSpec::BusyLoop { cycles: 1 << 17 };
+    let spec = MultiTestSpec::BusyLoop { cycles: 1 << 18 };
     let povw_job_id = PovwJobId {
         log: PovwLogId::from(0x202ce_u64),
         job: 42,
@@ -990,7 +1011,7 @@ fn povw_nonce_assignment() -> Result<()> {
     let env = ExecutorEnv::builder()
         .write(&spec)
         .unwrap()
-        .segment_limit_po2(15)
+        .segment_limit_po2(17)
         .povw(povw_job_id)
         .build()
         .unwrap();
@@ -1008,11 +1029,11 @@ fn povw_nonce_assignment() -> Result<()> {
 
 #[test_log::test]
 fn povw_nonce_default_assignment() -> Result<()> {
-    let spec = MultiTestSpec::BusyLoop { cycles: 1 << 17 };
+    let spec = MultiTestSpec::BusyLoop { cycles: 1 << 18 };
     let env = ExecutorEnv::builder()
         .write(&spec)
         .unwrap()
-        .segment_limit_po2(15)
+        .segment_limit_po2(17)
         .build()
         .unwrap();
     let session = ExecutorImpl::from_elf(env, MULTI_TEST_ELF)?.run()?;
@@ -1065,12 +1086,12 @@ fn povw_prove_work_receipt() -> Result<()> {
 
 mod soundness {
     // use risc0_circuit_rv32im::{prove::emu::exec::DEFAULT_SEGMENT_LIMIT_PO2, CIRCUIT};
-    use risc0_circuit_rv32im::{execute::DEFAULT_SEGMENT_LIMIT_PO2, CircuitImpl};
+    use risc0_circuit_rv32im::{CircuitImpl, execute::DEFAULT_SEGMENT_LIMIT_PO2};
     use risc0_zkp::{
         adapter::TapsProvider,
         field::{
-            baby_bear::{BabyBear, BabyBearExtElem},
             ExtElem,
+            baby_bear::{BabyBear, BabyBearExtElem},
         },
         hal::cpu::CpuHal,
         prove::soundness,

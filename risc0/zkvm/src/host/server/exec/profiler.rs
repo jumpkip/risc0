@@ -1,16 +1,17 @@
 // Copyright 2025 RISC Zero, Inc.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
+// Licensed under the Apache License, Version 2.0, <LICENSE-APACHE or
+// http://apache.org/licenses/LICENSE-2.0> or the MIT license <LICENSE-MIT or
+// http://opensource.org/licenses/MIT>, at your option. This file may not be
+// copied, modified, or distributed except according to those terms.
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+//
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 
 //! Support for profiling the guest.
 //!
@@ -35,12 +36,12 @@ use std::{
 };
 
 use addr2line::{
+    Context, LookupResult,
     fallible_iterator::FallibleIterator,
     gimli::{self, EndianRcSlice, RunTimeEndian},
-    Context, LookupResult,
 };
-use anyhow::{anyhow, Result};
-use elf::{abi::STT_FUNC, endian::LittleEndian, ElfBytes};
+use anyhow::{Result, anyhow};
+use elf::{ElfBytes, abi::STT_FUNC, endian::LittleEndian};
 use object::{Object as _, ObjectSegment as _};
 use prost::Message;
 use risc0_binfmt::ProgramBinary;
@@ -54,6 +55,8 @@ use crate::{TraceCallback, TraceEvent};
 
 type GimliReader = EndianRcSlice<RunTimeEndian>;
 type ObjectContext = Context<GimliReader>;
+
+const USER_END_ADDR: u32 = 0xc000_0000;
 
 /// Operations effecting the function call stack.
 #[derive(Debug)]
@@ -652,16 +655,18 @@ impl TraceCallback for Profiler {
 
                 self.add_cycles_to_current_stack(cycles);
 
-                let mut update_stack = false;
+                if pc <= USER_END_ADDR {
+                    let mut update_stack = false;
 
-                if let Some(op) = extract_call_stack_op(orig_insn) {
-                    self.handle_function_call(op, pc, orig_pc, &mut update_stack)?;
-                }
+                    if let Some(op) = extract_call_stack_op(orig_insn) {
+                        self.handle_function_call(op, pc, orig_pc, &mut update_stack)?;
+                    }
 
-                self.handle_inline_functions(pc, &mut update_stack);
+                    self.handle_inline_functions(pc, &mut update_stack);
 
-                if update_stack {
-                    self.update_stack(pc);
+                    if update_stack {
+                        self.update_stack(pc);
+                    }
                 }
 
                 // Update pc, insn, and cycle

@@ -1,27 +1,30 @@
 // Copyright 2025 RISC Zero, Inc.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
+// Licensed under the Apache License, Version 2.0, <LICENSE-APACHE or
+// http://apache.org/licenses/LICENSE-2.0> or the MIT license <LICENSE-MIT or
+// http://opensource.org/licenses/MIT>, at your option. This file may not be
+// copied, modified, or distributed except according to those terms.
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+//
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 
 use std::time::Duration;
 
-use anyhow::{ensure, Context, Result};
+use anyhow::{Context, Result, ensure};
 use risc0_zkp::core::digest::Digest;
 use serde::{Deserialize, Deserializer, Serialize};
 
 use crate::{
+    ExecutorEnv, MaybePruned, PreflightResults, ProverOpts, ProverServer, Receipt, ReceiptClaim,
+    ReceiptKind, Segment, Session, VerifierContext, WorkClaim,
     claim::{
-        receipt::{exit_code_from_terminate_state, UnionClaim},
         Unknown,
+        receipt::{UnionClaim, exit_code_from_terminate_state},
     },
     host::{
         prove_info::ProveInfo,
@@ -29,15 +32,13 @@ use crate::{
     },
     receipt::{FakeReceipt, InnerReceipt, SegmentReceipt, SuccinctReceipt},
     recursion::MerkleProof,
-    ExecutorEnv, MaybePruned, PreflightResults, ProverOpts, ProverServer, Receipt, ReceiptClaim,
-    Segment, Session, VerifierContext, WorkClaim,
 };
 
 const ERR_DEV_MODE_DISABLED: &str =
     "zkVM: dev mode is disabled. Unset RISC0_DEV_MODE environment variable to produce valid proofs";
 
 /// Configuration for simulated DevMode delay.
-#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, Eq, PartialEq)]
 pub struct DevModeDelay {
     /// Delay for prove_segment_core
     #[serde(deserialize_with = "duration_secs")]
@@ -66,6 +67,10 @@ pub struct DevModeDelay {
     /// Delay for resolve
     #[serde(deserialize_with = "duration_secs")]
     pub resolve: Duration,
+
+    /// Delay for shrink-wrap groth16
+    #[serde(deserialize_with = "duration_secs")]
+    pub shrink_wrap_groth16: Duration,
 }
 
 /// An implementation of a [ProverServer] for development and testing purposes.
@@ -312,6 +317,20 @@ impl ProverServer for DevModeProver {
     fn compress(&self, opts: &ProverOpts, receipt: &Receipt) -> Result<Receipt> {
         ensure!(opts.dev_mode(), ERR_DEV_MODE_DISABLED);
         ensure_dev_mode_allowed!();
+
+        if let Some(delay) = &self.delay {
+            match opts.receipt_kind {
+                ReceiptKind::Composite => {
+                    // TODO: Apply a delay here.
+                }
+                ReceiptKind::Succinct => {
+                    // TODO: Apply a delay here.
+                }
+                ReceiptKind::Groth16 => {
+                    std::thread::sleep(delay.shrink_wrap_groth16);
+                }
+            }
+        }
 
         Ok(Receipt::new(
             InnerReceipt::Fake(FakeReceipt {
